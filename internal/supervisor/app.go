@@ -481,6 +481,12 @@ func (a *App) environ(spec app.Spec) []string {
 	for k, v := range contract {
 		env[k] = v
 	}
+	// Go does not read the cgroup memory limit, so without this a Go app
+	// grows until the kernel OOM-kills it instead of collecting garbage.
+	// Other languages ignore it. A GOMEMLIMIT set by the user wins.
+	if _, set := env["GOMEMLIMIT"]; !set && spec.Limits.MemoryMax > 0 {
+		env["GOMEMLIMIT"] = strconv.FormatInt(GoMemLimit(spec.Limits.MemoryMax), 10)
+	}
 	out := make([]string, 0, len(env))
 	for k, v := range env {
 		out = append(out, k+"="+v)
@@ -488,6 +494,11 @@ func (a *App) environ(spec app.Spec) []string {
 	sort.Strings(out)
 	return out
 }
+
+// GoMemLimit is the GOMEMLIMIT given to apps: 90% of their memory limit,
+// leaving room for memory the Go runtime does not count (stacks of
+// non-Go threads, cgo, page cache charged to the cgroup).
+func GoMemLimit(memoryMax int64) int64 { return memoryMax / 10 * 9 }
 
 func (a *App) dataDir(spec app.Spec) string { return a.dirs.DataDir(spec.Name) }
 func (a *App) tmpDir(spec app.Spec) string  { return a.dirs.TmpDir(spec.Name) }

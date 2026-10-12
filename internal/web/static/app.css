@@ -70,12 +70,56 @@ nav.ranges{display:flex;gap:4px}nav.ranges a{padding:2px 10px;border:1px solid v
 nav.ranges a.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .row-form{display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap}.row-form label{flex:1;min-width:min(16rem,100%)}.row-form select{width:100%}
 @media (max-width:760px){
-  .top{padding:10px 16px}
-  main{margin-top:16px;padding:0 10px}
-  .card{padding:16px}
-  .stats{grid-template-columns:1fr 1fr;gap:10px}.stats div{padding:12px}
-  form.grid{grid-template-columns:1fr}
-  dl.facts{grid-template-columns:1fr;gap:2px}dl.facts dd{margin-bottom:8px}
-  table{display:block;overflow-x:auto;white-space:nowrap}
+  body{font-size:16px}
+  .top{padding:4px 14px 0;gap:0 12px}
+  .top .brand{padding:10px 0}
+  .top nav{width:100%;flex-wrap:nowrap;justify-content:space-between;gap:0 4px;overflow-x:auto}
+  .top nav a,.top nav .link{padding:10px 4px;white-space:nowrap;font-size:15px}
+  .top nav form{margin-left:auto}
+  main{margin-top:14px;padding:0 10px}
+  .card{padding:14px}
+  .card.narrow{margin:24px auto}
+  h1{font-size:20px;overflow-wrap:anywhere}
+  .stats{grid-template-columns:1fr 1fr;gap:10px}.stats div{padding:12px;min-width:0;overflow-wrap:anywhere}
+  .row{align-items:flex-start}
+  .actions{width:100%}
+  .actions>form,.actions>.button{flex:1 1 0}
+  .actions button,.actions .button{width:100%;text-align:center}
+  button,.button,input,select{min-height:44px}
+  textarea{min-height:88px}
+  input,select,textarea{font-size:16px}
+  .buttons button,.row-form button,.row>form button{min-width:44px}
+  .row-form button,.buttons button{flex:1 1 auto}
+  form.grid{grid-template-columns:minmax(0,1fr)}
+  label>input:not([type=checkbox]),label>select,label>textarea{width:100%;max-width:100%}
+  fieldset label{flex:1 1 7rem}
+  fieldset input{width:100%}
+  label.check{min-height:44px}
+  button.link{min-height:44px;padding:0 6px}
+  nav.ranges{gap:6px}nav.ranges a{padding:10px 14px}
+  dl.facts{grid-template-columns:1fr;gap:2px}dl.facts dd{margin-bottom:8px;overflow-wrap:anywhere}
+  .flash,.warn,.error,.info,.muted{overflow-wrap:anywhere}
+  table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
   td.clip{max-width:none}
+  th,td{padding:10px 8px}
+  td a{display:inline-block;padding:6px 0}
+  /* Lists of things become one card per row instead of a wide table. */
+  table.stack{display:block;overflow:visible;white-space:normal}
+  table.stack thead{display:none}
+  table.stack tbody,table.stack tr{display:block}
+  table.stack tr{border:1px solid var(--line);border-radius:8px;padding:6px 12px;margin-bottom:10px}
+  table.stack td{display:block;position:relative;border:0;padding:5px 0 5px 6.5rem;min-height:30px;text-align:right;overflow-wrap:anywhere;white-space:normal}
+  table.stack td::before{content:attr(data-label);position:absolute;left:0;top:5px;color:var(--muted);font-weight:600;text-align:left}
+  table.stack td:first-child{font-size:17px;padding:0 0 8px;border-bottom:1px solid var(--line);margin-bottom:3px;text-align:left}
+  table.stack td:first-child::before{content:none}
+  table.stack td.end{padding:2px 0 0;border-top:1px solid var(--line);margin-top:3px}
+  table.stack td.end::before{content:none}
+  table.stack td.end a{padding:10px 4px}
+  table.stack td:empty{display:none}
+  table.stack td[colspan]{padding-left:0;text-align:left}
+  .stats div:first-child,.stats div:last-child:nth-child(even){grid-column:1/-1}
+}
+@media (max-width:380px){
+  .card{padding:12px}
+  .top .brand{font-size:17px}
 }

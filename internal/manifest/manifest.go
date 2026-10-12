@@ -81,7 +81,7 @@ func Parse(b []byte) (*Manifest, error) {
 	}
 
 	if r.Run == nil {
-		errs = append(errs, errors.New(`run is required, e.g. run = "zig-out/bin/myapp"`))
+		errs = append(errs, errors.New(`run is required, e.g. run = "myapp"`))
 	} else if argv, err := app.SplitCommand(*r.Run); err != nil {
 		errs = append(errs, fmt.Errorf("run: %w", err))
 	} else if err := checkRelPath(argv[0]); err != nil {

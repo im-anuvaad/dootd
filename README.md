@@ -1,6 +1,6 @@
 # binboat
 
-A tiny, self-contained PaaS for hosting small server-rendered **Zig / C + SQLite** web apps on a single VPS behind Cloudflare.
+A tiny, self-contained PaaS for hosting small server-rendered web apps (**Go, Zig or C** + SQLite) on a single VPS behind Cloudflare.
 
 One binary. No Docker, no extra reverse proxy. SSH in once and run one command; it prints a one-time password, and everything else happens in a web dashboard.
 
