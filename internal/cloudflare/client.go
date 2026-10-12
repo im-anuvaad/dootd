@@ -1,5 +1,5 @@
 // Package cloudflare is a minimal client for the Cloudflare v4 REST API:
-// the calls dootd needs for DNS, Origin CA certificates, zone-level
+// the calls binboat needs for DNS, Origin CA certificates, zone-level
 // Authenticated Origin Pulls, the SSL mode and the published IP ranges.
 package cloudflare
 
@@ -204,13 +204,13 @@ func (c *Client) UpsertProxied(ctx context.Context, zoneID, name, typ, content s
 	for _, r := range rs {
 		switch r.Type {
 		case "CNAME":
-			return "", fmt.Errorf("%s has a CNAME record; delete it in Cloudflare so dootd can create the %s record", name, typ)
+			return "", fmt.Errorf("%s has a CNAME record; delete it in Cloudflare so binboat can create the %s record", name, typ)
 		case typ:
 			same = append(same, r)
 		}
 	}
 	if len(same) > 1 {
-		return "", fmt.Errorf("%s has %d %s records; keep only one (dootd will then manage it)", name, len(same), typ)
+		return "", fmt.Errorf("%s has %d %s records; keep only one (binboat will then manage it)", name, len(same), typ)
 	}
 	if len(same) == 0 {
 		return "created", c.do(ctx, http.MethodPost, "/zones/"+zoneID+"/dns_records", "DNS: Edit", want, nil)

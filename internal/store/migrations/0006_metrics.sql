@@ -1,10 +1,10 @@
 -- One row per scope per minute, kept 7 days (docs/architecture.md §9).
--- scope: "_host", "_dootd" or an app name. Rates are per minute; NULL
+-- scope: "_host", "_binboat" or an app name. Rates are per minute; NULL
 -- latency means no requests in that minute.
 CREATE TABLE metrics_1m (
     scope       TEXT    NOT NULL,
     ts          INTEGER NOT NULL, -- minute start, unix seconds
-    cpu         REAL    NOT NULL, -- percent (host: of all cores; apps/dootd: of one core)
+    cpu         REAL    NOT NULL, -- percent (host: of all cores; apps/binboat: of one core)
     mem         INTEGER NOT NULL, -- bytes (max in the minute)
     mem_limit   INTEGER NOT NULL, -- host: total RAM; apps: memory.max
     swap        INTEGER NOT NULL,

@@ -7,7 +7,7 @@ CREATE TABLE edge_certs (
     issued_at  INTEGER NOT NULL
 ) STRICT;
 
--- Per-zone Cloudflare state managed by dootd.
+-- Per-zone Cloudflare state managed by binboat.
 CREATE TABLE edge_zones (
     zone_id         TEXT    PRIMARY KEY,
     name            TEXT    NOT NULL,

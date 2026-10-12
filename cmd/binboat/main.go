@@ -1,7 +1,7 @@
-// Command dootd is a minimal single-binary PaaS for small Zig/C + SQLite web apps.
+// Command binboat is a minimal single-binary PaaS for small Zig/C + SQLite web apps.
 //
-// It has no admin CLI: install.sh runs `dootd setup-host`, systemd runs
-// `dootd serve`, and everything else happens in the dashboard
+// It has no admin CLI: install.sh runs `binboat setup-host`, systemd runs
+// `binboat serve`, and everything else happens in the dashboard
 // (docs/architecture.md, D33).
 package main
 
@@ -10,19 +10,19 @@ import (
 	"io"
 	"os"
 
-	"github.com/sumitwaani2/dootd/internal/buildinfo"
+	"github.com/sumitwaani2/binboat/internal/buildinfo"
 )
 
-const usage = `dootd - minimal PaaS for small Zig/C + SQLite web apps
+const usage = `binboat - minimal PaaS for small Zig/C + SQLite web apps
 
 Install or update it with:
-  curl -fsSL https://github.com/sumitwaani2/dootd/releases/latest/download/install.sh | sudo bash
+  curl -fsSL https://github.com/sumitwaani2/binboat/releases/latest/download/install.sh | sudo bash
 and manage it in the dashboard. These commands are used by the installer
 and systemd:
 
   version      Print version information
-  setup-host   Prepare the host, start dootd, print a one-time password (run by install.sh)
-  serve        Run the dootd service (run by systemd)
+  setup-host   Prepare the host, start binboat, print a one-time password (run by install.sh)
+  serve        Run the binboat service (run by systemd)
 `
 
 func main() {
@@ -54,7 +54,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		return runSetupHost(stdout, stderr)
 	default:
-		fmt.Fprintf(stderr, "dootd: unknown command %q\n\n%s", args[0], usage)
+		fmt.Fprintf(stderr, "binboat: unknown command %q\n\n%s", args[0], usage)
 		return 2
 	}
 }

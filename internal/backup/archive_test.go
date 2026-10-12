@@ -14,7 +14,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
-	"github.com/sumitwaani2/dootd/internal/s3"
+	"github.com/sumitwaani2/binboat/internal/s3"
 )
 
 func TestArchiveRoundTrip(t *testing.T) {

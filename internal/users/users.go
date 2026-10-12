@@ -1,5 +1,5 @@
 // Package users manages the per-app unprivileged system users
-// ("dootd-<app>") that app and build processes run as.
+// ("binboat-<app>") that app and build processes run as.
 package users
 
 import (
@@ -12,7 +12,7 @@ import (
 )
 
 // Prefix is prepended to the app name to form the system user name.
-const Prefix = "dootd-"
+const Prefix = "binboat-"
 
 // User is a resolved system user.
 type User struct {
@@ -56,7 +56,7 @@ func Ensure(app string) (User, error) {
 	out, err := exec.Command("useradd",
 		"--system", "--user-group", "--no-create-home",
 		"--home-dir", "/nonexistent", "--shell", "/usr/sbin/nologin",
-		"--comment", "dootd app "+app, name).CombinedOutput()
+		"--comment", "binboat app "+app, name).CombinedOutput()
 	if err != nil {
 		return User{}, fmt.Errorf("users: useradd %s: %v: %s", name, err, strings.TrimSpace(string(out)))
 	}

@@ -152,8 +152,8 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 
 // Test uploads, reads back and deletes a small object.
 func (c *Client) Test(ctx context.Context) error {
-	key := ".dootd-connection-test"
-	body := []byte("dootd connection test " + time.Now().UTC().Format(time.RFC3339Nano))
+	key := ".binboat-connection-test"
+	body := []byte("binboat connection test " + time.Now().UTC().Format(time.RFC3339Nano))
 	if _, err := c.mc.PutObject(ctx, c.bucket, key, bytes.NewReader(body), int64(len(body)), minio.PutObjectOptions{ContentType: "text/plain"}); err != nil {
 		return wrap("test upload", err)
 	}

@@ -10,9 +10,9 @@ import (
 	"strings"
 )
 
-// ContractVersion is the app contract version dootd implements
+// ContractVersion is the app contract version binboat implements
 // (docs/app-contract.md).
-const ContractVersion = 2
+const ContractVersion = 3
 
 // Default resource limits (docs/app-contract.md §8).
 const (
@@ -48,12 +48,13 @@ var (
 	envNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
-// ReservedEnv are env names set by dootd that users may not override.
+// ReservedEnv are env names set by binboat that users may not override.
 var ReservedEnv = []string{"PORT", "HOST", "DATA_DIR", "TMPDIR"}
 
 // ValidateName checks an app name: 2-24 chars, lowercase letters, digits and
 // hyphens, starting with a letter and not ending with a hyphen. The limit
-// keeps the system user name "dootd-<name>" within 30 characters.
+// keeps the system user name "binboat-<name>" within 32 characters, the
+// longest name useradd accepts.
 func ValidateName(name string) error {
 	if !nameRe.MatchString(name) {
 		return fmt.Errorf("invalid app name %q: use 2-24 characters of a-z, 0-9 and '-', starting with a letter and not ending with '-'", name)
@@ -77,12 +78,12 @@ func ValidateEnvName(name string) error {
 	if !envNameRe.MatchString(name) {
 		return fmt.Errorf("invalid env var name %q: use letters, digits and '_', not starting with a digit", name)
 	}
-	if strings.HasPrefix(name, "DOOTD_") {
-		return fmt.Errorf("env var %q is reserved (names starting with DOOTD_ are set by dootd)", name)
+	if strings.HasPrefix(name, "BINBOAT_") {
+		return fmt.Errorf("env var %q is reserved (names starting with BINBOAT_ are set by binboat)", name)
 	}
 	for _, r := range ReservedEnv {
 		if name == r {
-			return fmt.Errorf("env var %q is reserved (set by dootd)", name)
+			return fmt.Errorf("env var %q is reserved (set by binboat)", name)
 		}
 	}
 	return nil

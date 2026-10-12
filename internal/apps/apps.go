@@ -1,5 +1,5 @@
 // Package apps is the app registry behind the dashboard: apps and their
-// env vars are stored in dootd.db and wired into the deployer, the
+// env vars are stored in binboat.db and wired into the deployer, the
 // supervisor and the edge router.
 package apps
 
@@ -15,14 +15,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/app"
-	"github.com/sumitwaani2/dootd/internal/deployer"
-	"github.com/sumitwaani2/dootd/internal/edge"
-	"github.com/sumitwaani2/dootd/internal/github"
-	"github.com/sumitwaani2/dootd/internal/secrets"
-	"github.com/sumitwaani2/dootd/internal/store"
-	"github.com/sumitwaani2/dootd/internal/supervisor"
-	"github.com/sumitwaani2/dootd/internal/users"
+	"github.com/sumitwaani2/binboat/internal/app"
+	"github.com/sumitwaani2/binboat/internal/deployer"
+	"github.com/sumitwaani2/binboat/internal/edge"
+	"github.com/sumitwaani2/binboat/internal/github"
+	"github.com/sumitwaani2/binboat/internal/secrets"
+	"github.com/sumitwaani2/binboat/internal/store"
+	"github.com/sumitwaani2/binboat/internal/supervisor"
+	"github.com/sumitwaani2/binboat/internal/users"
 )
 
 // Port range for app listeners.
@@ -105,7 +105,7 @@ func New(db *store.Store, box *secrets.Box, dep *deployer.Deployer, sup *supervi
 func envPurpose(appName, key string) string { return "app_env:" + appName + ":" + key }
 
 // Load registers every stored app. Apps that fail to load are logged and
-// skipped so one bad row cannot keep dootd down.
+// skipped so one bad row cannot keep binboat down.
 func (s *Service) Load(ctx context.Context) error {
 	list, err := s.stored(ctx)
 	if err != nil {

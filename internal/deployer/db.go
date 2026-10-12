@@ -205,7 +205,7 @@ func (d *Deployer) queryReleases(ctx context.Context, where string, args ...any)
 	return out, rows.Err()
 }
 
-// DesiredRunning reports whether app should run after a dootd restart
+// DesiredRunning reports whether app should run after a binboat restart
 // (default: yes).
 func (d *Deployer) DesiredRunning(ctx context.Context, app string) bool {
 	var s string
@@ -224,10 +224,10 @@ func (d *Deployer) SetDesired(ctx context.Context, app string, running bool) err
 	return err
 }
 
-// recover marks deployments interrupted by a dootd restart as failed.
+// recover marks deployments interrupted by a binboat restart as failed.
 func (d *Deployer) recoverInterrupted(ctx context.Context) (int64, error) {
 	res, err := d.db.Writer().ExecContext(ctx, `UPDATE deployments
-		SET status = ?, error = 'interrupted: dootd restarted during this deployment', finished_at = ?
+		SET status = ?, error = 'interrupted: binboat restarted during this deployment', finished_at = ?
 		WHERE status IN (?, ?, ?, 'building')`, StatusFailed, time.Now().Unix(), StatusQueued, StatusPreparing, StatusDeploying)
 	if err != nil {
 		return 0, err

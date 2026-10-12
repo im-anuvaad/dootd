@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}} · dootd</title>
+<title>{{.Title}} · binboat</title>
 <link rel="stylesheet" href="/static/app.css">
 <script src="/static/app.js" defer></script>
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="/">dootd</a>
+  <a class="brand" href="/">binboat</a>
   {{if .CSRF}}
   <nav>
     <a href="/" {{if eq .Nav "apps"}}class="on"{{end}}>Apps</a>
@@ -24,7 +24,7 @@
 {{if .Flash}}<div class="flash {{if .FlashOK}}ok{{else}}err{{end}}" role="status">{{.Flash}}</div>{{end}}
 {{template "content" .}}
 </main>
-<footer>dootd {{.Version}}</footer>
+<footer>binboat {{.Version}}</footer>
 </body>
 </html>{{end}}
 

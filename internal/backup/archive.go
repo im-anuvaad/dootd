@@ -21,13 +21,13 @@ const ManifestVersion = 1
 
 // Manifest is manifest.json, the first entry of every archive.
 type Manifest struct {
-	Version      int            `json:"version"`
-	App          string         `json:"app"`
-	Kind         string         `json:"kind"`
-	CreatedAt    time.Time      `json:"created_at"`
-	Release      string         `json:"release"`
-	DootdVersion string         `json:"dootd_version"`
-	Files        []ManifestFile `json:"files"`
+	Version        int            `json:"version"`
+	App            string         `json:"app"`
+	Kind           string         `json:"kind"`
+	CreatedAt      time.Time      `json:"created_at"`
+	Release        string         `json:"release"`
+	BinboatVersion string         `json:"binboat_version"`
+	Files          []ManifestFile `json:"files"`
 }
 
 // ManifestFile is one database in the archive.
@@ -129,7 +129,7 @@ func extractArchive(archive, dir string) (*Manifest, error) {
 
 	h, err := tr.Next()
 	if err != nil || h.Name != "manifest.json" || h.Size > 1<<20 {
-		return nil, errors.New("not a dootd backup archive (manifest.json must come first)")
+		return nil, errors.New("not a binboat backup archive (manifest.json must come first)")
 	}
 	var m Manifest
 	if err := json.NewDecoder(io.LimitReader(tr, 1<<20)).Decode(&m); err != nil {

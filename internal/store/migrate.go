@@ -19,8 +19,8 @@ var migrationFiles embed.FS
 // embeddedMigrations is the migrations directory compiled into the binary.
 var embeddedMigrations = mustSub(migrationFiles, "migrations")
 
-// ErrSchemaTooNew means the database was migrated by a newer dootd.
-var ErrSchemaTooNew = errors.New("store: database schema is newer than this dootd binary supports")
+// ErrSchemaTooNew means the database was migrated by a newer binboat.
+var ErrSchemaTooNew = errors.New("store: database schema is newer than this binboat binary supports")
 
 // Migration file names: NNNN_short_name.sql, e.g. 0001_init.sql.
 // Rules: never edit an applied migration; never put BEGIN/COMMIT in a file

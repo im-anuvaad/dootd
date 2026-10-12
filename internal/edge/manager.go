@@ -19,9 +19,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/cloudflare"
-	"github.com/sumitwaani2/dootd/internal/secrets"
-	"github.com/sumitwaani2/dootd/internal/store"
+	"github.com/sumitwaani2/binboat/internal/cloudflare"
+	"github.com/sumitwaani2/binboat/internal/secrets"
+	"github.com/sumitwaani2/binboat/internal/store"
 )
 
 // Settings keys.
@@ -41,7 +41,7 @@ const (
 	syncEvery       = 6 * time.Hour
 	ipRefreshEvery  = 24 * time.Hour
 	aopActivateWait = 3 * time.Minute
-	// AOPRollout is how long dootd waits, after Cloudflare reports a newly
+	// AOPRollout is how long binboat waits, after Cloudflare reports a newly
 	// uploaded client certificate active (or zone-level AOP newly turned
 	// on), before it requires the certificate. Cloudflare's edge servers
 	// pick the change up gradually: on a real VPS some of them kept
@@ -53,7 +53,7 @@ const (
 // Config configures the edge. Nothing here is user-configurable.
 type Config struct {
 	Listen   string // ":443"
-	AOP      bool   // zone-level Authenticated Origin Pulls (always on in dootd serve)
+	AOP      bool   // zone-level Authenticated Origin Pulls (always on in binboat serve)
 	DataRoot string
 	// SetupPending reports whether a one-time password is pending.
 	SetupPending func() bool
@@ -229,7 +229,7 @@ func (m *Manager) DashboardProblem() string {
 	case zs.SSLMode == "":
 		return "checking the SSL/TLS mode of " + zoneName(zs, h) + "; opening https://" + h + "/ once also proves it works"
 	case zs.SSLMode != "full" && zs.SSLMode != "strict":
-		return fmt.Sprintf("the SSL/TLS mode of %s is %q, so Cloudflare cannot reach dootd; set it to Full (strict) (Settings → Zones)", zoneName(zs, h), zs.SSLMode)
+		return fmt.Sprintf("the SSL/TLS mode of %s is %q, so Cloudflare cannot reach binboat; set it to Full (strict) (Settings → Zones)", zoneName(zs, h), zs.SSLMode)
 	}
 	return ""
 }
@@ -745,7 +745,7 @@ func (m *Manager) syncZone(ctx context.Context, c *cloudflare.Client, z cloudfla
 			mode = prev.SSLMode
 		}
 		if cloudflare.IsForbidden(err) && mode == "" {
-			zs.Warning = "dootd cannot read the SSL/TLS mode: the Cloudflare token lacks the Zone → Zone Settings → Edit permission. " +
+			zs.Warning = "binboat cannot read the SSL/TLS mode: the Cloudflare token lacks the Zone → Zone Settings → Edit permission. " +
 				"Edit the token in Cloudflare (My Profile → API Tokens) to add it, then press Sync now"
 		}
 	}
@@ -753,9 +753,9 @@ func (m *Manager) syncZone(ctx context.Context, c *cloudflare.Client, z cloudfla
 	switch mode {
 	case "", "strict":
 	case "full":
-		zs.Warning = fmt.Sprintf("SSL/TLS mode is %q; use Full (strict) so Cloudflare verifies dootd's certificate (Settings → Zones → Set Full (strict))", mode)
+		zs.Warning = fmt.Sprintf("SSL/TLS mode is %q; use Full (strict) so Cloudflare verifies binboat's certificate (Settings → Zones → Set Full (strict))", mode)
 	default: // flexible, off
-		zs.Warning = fmt.Sprintf("SSL/TLS mode is %q: Cloudflare connects to this server over plain HTTP, which dootd does not serve, "+
+		zs.Warning = fmt.Sprintf("SSL/TLS mode is %q: Cloudflare connects to this server over plain HTTP, which binboat does not serve, "+
 			"so sites in this zone fail with error 521. Set it to Full (strict) (Settings → Zones → Set Full (strict))", mode)
 	}
 
@@ -858,7 +858,7 @@ func (m *Manager) syncAOP(ctx context.Context, c *cloudflare.Client, z cloudflar
 // rolledOut decides whether to require client certificates for a zone
 // whose AOP setup is in place at Cloudflare. A zone that is enforced
 // already stays enforced, unless the sync just uploaded the certificate or
-// turned AOP on: then, and for a zone that was never enforced, dootd
+// turned AOP on: then, and for a zone that was never enforced, binboat
 // waits AOPRollout for Cloudflare's edge to catch up, accepting
 // connections without a certificate meanwhile (the IP filter stays on),
 // and syncs again when the time is up.

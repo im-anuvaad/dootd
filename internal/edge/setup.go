@@ -69,8 +69,8 @@ func loadOrCreateSetupCert(dir string) (*tls.Certificate, error) {
 	now := time.Now()
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial,
-		Subject:               pkix.Name{CommonName: "dootd setup"},
-		DNSNames:              []string{"dootd-setup"},
+		Subject:               pkix.Name{CommonName: "binboat setup"},
+		DNSNames:              []string{"binboat-setup"},
 		NotBefore:             now.Add(-time.Hour),
 		NotAfter:              now.AddDate(10, 0, 0),
 		KeyUsage:              x509.KeyUsageDigitalSignature,

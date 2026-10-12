@@ -1,14 +1,14 @@
-# dootd App Contract
+# binboat App Contract
 
-The rules a Zig or C web app must follow to be hosted on dootd, and everything needed to build one. Follow them and the app deploys with one click.
+The rules a Zig or C web app must follow to be hosted on binboat, and everything needed to build one. Follow them and the app deploys with one click.
 
-Contract version: **2** (the app's own GitHub Actions workflow builds it; dootd only deploys the result).
+Contract version: **3** (the app's own GitHub Actions workflow builds it; binboat only deploys the result).
 
 ---
 
 ## 1. Summary checklist
 
-- [ ] The repo has a `dootd.toml` at the root with `contract = 2` and `run`. The repo name becomes the app name (e.g. `my_blog` → `my-blog`).
+- [ ] The repo has a `binboat.toml` at the root with `contract = 3` and `run`. The repo name becomes the app name (e.g. `my_blog` → `my-blog`).
 - [ ] The repo has the release workflow (`.github/workflows/release.yml`, §2.2). Pushing a `v*` tag tests, builds and publishes a GitHub release.
 - [ ] The release tarball holds everything the app needs at runtime: the binary and any templates or static files.
 - [ ] The app serves plain HTTP on **`127.0.0.1:$PORT`**. No TLS.
@@ -22,23 +22,23 @@ Contract version: **2** (the app's own GitHub Actions workflow builds it; dootd 
 
 ## 2. Releases
 
-### 2.1 `dootd.toml`
+### 2.1 `binboat.toml`
 
 It says how to **run** the app, and it travels inside every release tarball. Operational settings (domain, env vars, resource limits) are set in the dashboard.
 
 ```toml
-contract    = 2
+contract    = 3
 run         = "zig-out/bin/myapp"   # required: binary + arguments, relative to the tarball root
 health_path = "/healthz"            # optional, default "/"
 ```
 
 | Field | Required | Default | Notes |
 |---|---|---|---|
-| `contract` | yes | — | `2`. |
+| `contract` | yes | — | `3`. |
 | `run` | yes | — | Binary path plus arguments. It is **not run through a shell**, so pipes, `&&` and `$VAR` expansion don't work. The binary must be a Linux ELF executable for the server's CPU. |
 | `health_path` | no | `/` | Must return 2xx or 3xx within 30 s of start. |
 
-Unknown keys are rejected, so typos fail the deploy instead of being ignored (`zig_version` and `build` from contract 1 included).
+Unknown keys are rejected, so typos fail the deploy instead of being ignored.
 
 ### 2.2 The release workflow
 
@@ -50,13 +50,13 @@ Save this as `.github/workflows/release.yml` in the app's repo and edit the `env
 | `TEST` | Your tests; they run first, and a failure publishes nothing | `zig build test` | `make test CC="zig cc"` |
 | `CLEAN` | Removes the previous architecture's build output | `rm -rf zig-out` | `rm -rf build` |
 | `BUILD` | Builds for `$TARGET` (`x86_64-linux-musl`, then `aarch64-linux-musl`) | `zig build -Doptimize=ReleaseSafe -Dtarget=$TARGET` | `make CC="zig cc -target $TARGET"` |
-| `FILES` | What goes into the tarball next to `dootd.toml` (paths kept) | `zig-out/bin/myapp templates static` | `build/myapp static` |
+| `FILES` | What goes into the tarball next to `binboat.toml` (paths kept) | `zig-out/bin/myapp templates static` | `build/myapp static` |
 
 ```yaml
-# Tests, builds and publishes this app as a GitHub release that dootd can
+# Tests, builds and publishes this app as a GitHub release that binboat can
 # deploy. Release with:  git tag v1.0.0 && git push origin v1.0.0
 # A failing test, build or smoke test publishes nothing. Nothing is deployed
-# either: the release shows up in the app's Deploy menu in dootd.
+# either: the release shows up in the app's Deploy menu in binboat.
 name: release
 
 on:
@@ -110,7 +110,7 @@ jobs:
             eval "$CLEAN"
             eval "$BUILD"
             pkg="$(mktemp -d)" && chmod 755 "$pkg"
-            cp dootd.toml "$pkg/"
+            cp binboat.toml "$pkg/"
             for f in $FILES; do
               mkdir -p "$pkg/$(dirname "$f")"
               cp -R "$f" "$pkg/$f"
@@ -121,7 +121,7 @@ jobs:
           (cd dist && sha256sum app-linux-*.tar.gz > checksums.txt)
           cat dist/checksums.txt
 
-      - name: Smoke test (start the amd64 package as dootd would)
+      - name: Smoke test (start the amd64 package as binboat would)
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -129,13 +129,13 @@ jobs:
           root = tempfile.mkdtemp()
           with tarfile.open("dist/app-linux-amd64.tar.gz") as t:
               t.extractall(root, filter="data")
-          m = tomllib.load(open(os.path.join(root, "dootd.toml"), "rb"))
-          assert m.get("contract") == 2, "dootd.toml: contract must be 2"
+          m = tomllib.load(open(os.path.join(root, "binboat.toml"), "rb"))
+          assert m.get("contract") == 3, "binboat.toml: contract must be 3"
           argv = shlex.split(m["run"])
           s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
           data, tmp = tempfile.mkdtemp(), tempfile.mkdtemp()
           env = {"PATH": "/usr/bin:/bin", "HOST": "127.0.0.1", "PORT": str(port), "DATA_DIR": data, "TMPDIR": tmp,
-                 "DOOTD_APP": "smoke", "DOOTD_RELEASE": os.environ.get("GITHUB_REF_NAME", "smoke"), "DOOTD_CONTRACT": "2"}
+                 "BINBOAT_APP": "smoke", "BINBOAT_RELEASE": os.environ.get("GITHUB_REF_NAME", "smoke"), "BINBOAT_CONTRACT": "3"}
           p = subprocess.Popen([os.path.join(root, argv[0])] + argv[1:], cwd=root, env=env)
           url = "http://127.0.0.1:%d%s" % (port, m.get("health_path", "/"))
           for _ in range(300):
@@ -157,11 +157,11 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
 ```
 
-The workflow runs `TEST`, builds both architectures, packages `app-linux-amd64.tar.gz` and `app-linux-arm64.tar.gz`, writes `checksums.txt`, starts the amd64 package exactly as dootd would and waits for `health_path`, and only then publishes the release. Nothing is deployed yet: the release appears in the app's **Deploy** menu in dootd, and you pick when.
+The workflow runs `TEST`, builds both architectures, packages `app-linux-amd64.tar.gz` and `app-linux-arm64.tar.gz`, writes `checksums.txt`, starts the amd64 package exactly as binboat would and waits for `health_path`, and only then publishes the release. Nothing is deployed yet: the release appears in the app's **Deploy** menu in binboat, and you pick when.
 
-- Tags must match `v*` and use only letters, digits, `.`, `_` and `-` (e.g. `v1.4.0`, `v1.4.0-rc1`); the tag becomes `DOOTD_RELEASE`.
+- Tags must match `v*` and use only letters, digits, `.`, `_` and `-` (e.g. `v1.4.0`, `v1.4.0-rc1`); the tag becomes `BINBOAT_RELEASE`.
 - Push the workflow file in a commit **before** the first tag: a tag pushed together with the repository's first commit does not start the workflow.
-- Builds run on GitHub's runners, never on your server. Private repos work: dootd downloads assets with the GitHub token from its settings (*Contents: Read-only*).
+- Builds run on GitHub's runners, never on your server. Private repos work: binboat downloads assets with the GitHub token from its settings (*Contents: Read-only*).
 - The tarball is unpacked read-only (owned by root). Anything the app writes goes in `$DATA_DIR` or `$TMPDIR`.
 
 ### 2.3 SQLite in the build
@@ -205,26 +205,26 @@ b.step("test", "Run the tests").dependOn(&b.addRunArtifact(tests).step);
 
 ---
 
-## 3. Environment variables dootd provides
+## 3. Environment variables binboat provides
 
 | Variable | Example | Meaning |
 |---|---|---|
 | `PORT` | `20001` | The port to listen on. It stays the same for an app across deploys. |
 | `HOST` | `127.0.0.1` | The address to bind to. Always bind here, never to `0.0.0.0`. |
-| `DATA_DIR` | `/var/lib/dootd/apps/blog/data` | Persistent, backed up, and survives every deploy. |
-| `TMPDIR` | `/var/lib/dootd/apps/blog/tmp` | Scratch space that may be wiped on every deploy. |
-| `DOOTD_APP` | `blog` | The app's name (from the repository name). |
-| `DOOTD_DOMAIN` | `blog.example.com` | The public domain. |
-| `DOOTD_RELEASE` | `v1.4.0` | The deployed release (its tag). |
-| `DOOTD_CONTRACT` | `2` | The contract version. |
+| `DATA_DIR` | `/var/lib/binboat/apps/blog/data` | Persistent, backed up, and survives every deploy. |
+| `TMPDIR` | `/var/lib/binboat/apps/blog/tmp` | Scratch space that may be wiped on every deploy. |
+| `BINBOAT_APP` | `blog` | The app's name (from the repository name). |
+| `BINBOAT_DOMAIN` | `blog.example.com` | The public domain. |
+| `BINBOAT_RELEASE` | `v1.4.0` | The deployed release (its tag). |
+| `BINBOAT_CONTRACT` | `3` | The contract version. |
 
-dootd also sets `PATH` and `LANG`, and adds your own env vars from the dashboard; nothing else is inherited (no `HOME`). Names starting with `DOOTD_`, and the names in the table above, are reserved. Changing env vars requires a **Restart**, not a new release.
+binboat also sets `PATH` and `LANG`, and adds your own env vars from the dashboard; nothing else is inherited (no `HOME`). Names starting with `BINBOAT_`, and the names in the table above, are reserved. Changing env vars requires a **Restart**, not a new release.
 
 ---
 
 ## 4. HTTP rules
 
-- Serve **plain HTTP/1.1**. dootd handles TLS in front of your app.
+- Serve **plain HTTP/1.1**. binboat handles TLS in front of your app.
 - Headers you can rely on:
   - `Host`: your domain.
   - `X-Forwarded-Proto: https` and `X-Forwarded-Host` (your domain).
@@ -232,8 +232,8 @@ dootd also sets `PATH` and `LANG`, and adds your own env vars from the dashboard
   - `CF-Connecting-IP` and `CF-IPCountry`, passed through from Cloudflare.
 - WebSockets, long-polling and streamed responses (SSE) work; responses are flushed to the visitor immediately.
 - Cloudflare limits request bodies to 100 MB on the free plan, so keep uploads smaller than that.
-- While a deploy is running, visitors see a short dootd "deploying" 503 page. Expect well under a second of downtime, plus however long your app takes to become healthy.
-- While your app is stopped or crashed, visitors get a dootd 503 page; if it stops answering unexpectedly, a 502.
+- While a deploy is running, visitors see a short binboat "deploying" 503 page. Expect well under a second of downtime, plus however long your app takes to become healthy.
+- While your app is stopped or crashed, visitors get a binboat 503 page; if it stops answering unexpectedly, a 502.
 
 ---
 
@@ -244,11 +244,11 @@ dootd also sets `PATH` and `LANG`, and adds your own env vars from the dashboard
 | Release dir (the unpacked tarball, current working dir) | read-only | replaced | no |
 | `$DATA_DIR` | read/write | ✅ yes | ✅ SQLite files |
 | `$TMPDIR` | read/write | ❌ may be wiped | no |
-| Other apps' folders, dootd's files | no access | — | — |
+| Other apps' folders, binboat's files | no access | — | — |
 
 - Static files and templates in the tarball can be read with relative paths, because the working directory is the release dir. List them in `FILES` (§2.2).
-- **Only SQLite databases in `$DATA_DIR` are backed up** (sub-folders included). dootd finds them by their file header, whatever their name. Other files in `$DATA_DIR`, such as user uploads, are kept across deploys but **not** backed up.
-- Don't create folders named `.pre-restore-*` in `$DATA_DIR`: dootd uses them to keep the previous databases after a restore.
+- **Only SQLite databases in `$DATA_DIR` are backed up** (sub-folders included). binboat finds them by their file header, whatever their name. Other files in `$DATA_DIR`, such as user uploads, are kept across deploys but **not** backed up.
+- Don't create folders named `.pre-restore-*` in `$DATA_DIR`: binboat uses them to keep the previous databases after a restore.
 
 ---
 
@@ -263,7 +263,7 @@ dootd also sets `PATH` and `LANG`, and adds your own env vars from the dashboard
    PRAGMA synchronous = NORMAL;
    ```
    Backups read the database while your app is running. `busy_timeout` makes sure a backup never causes a "database is locked" error in your app.
-3. **Run migrations at startup**, before you start listening. dootd takes a backup right before every deploy, so a bad migration can be undone with **Restore** in the dashboard.
+3. **Run migrations at startup**, before you start listening. binboat takes a backup right before every deploy, so a bad migration can be undone with **Restore** in the dashboard.
 4. Migrations should only move forward, and ideally stay compatible with the previous release. Rolling back the code does **not** roll back the database.
 
 ---
@@ -277,9 +277,9 @@ SIGTERM (deploy / restart / stop) ──► finish requests, close DB ──► 
                                   └─► after 10 s: SIGKILL
 ```
 
-- dootd starts your binary directly and supervises it. If it crashes, dootd restarts it with backoff (1 s, 2 s, 4 s … up to 60 s). After 5 crashes in 5 minutes, the app is marked **crashed** and left stopped.
+- binboat starts your binary directly and supervises it. If it crashes, binboat restarts it with backoff (1 s, 2 s, 4 s … up to 60 s). After 5 crashes in 5 minutes, the app is marked **crashed** and left stopped.
 - Don't daemonize, double-fork or write PID files.
-- When the main process exits, dootd kills anything else still running in the app's cgroup.
+- When the main process exits, binboat kills anything else still running in the app's cgroup.
 - stdout is a pipe, not a terminal, so C's stdio buffers it fully by default. Call `setvbuf(stdout, NULL, _IOLBF, 0)` at startup (or write logs to stderr), otherwise log lines appear late or are lost on a crash. `std.debug.print` in Zig writes unbuffered to stderr.
 - Lines longer than 16 KB are split into several log lines.
 
@@ -339,7 +339,7 @@ pub fn main(init: std.process.Init) !void {
 ```
 myapp/
 ├── .github/workflows/release.yml   # §2.2
-├── dootd.toml
+├── binboat.toml
 ├── build.zig                       # or a Makefile for C (§2.3)
 ├── build.zig.zon
 ├── src/main.zig

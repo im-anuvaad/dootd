@@ -20,15 +20,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/apps"
-	"github.com/sumitwaani2/dootd/internal/auth"
-	"github.com/sumitwaani2/dootd/internal/backup"
-	"github.com/sumitwaani2/dootd/internal/deployer"
-	"github.com/sumitwaani2/dootd/internal/edge"
-	"github.com/sumitwaani2/dootd/internal/layout"
-	"github.com/sumitwaani2/dootd/internal/metrics"
-	"github.com/sumitwaani2/dootd/internal/store"
-	"github.com/sumitwaani2/dootd/internal/supervisor"
+	"github.com/sumitwaani2/binboat/internal/apps"
+	"github.com/sumitwaani2/binboat/internal/auth"
+	"github.com/sumitwaani2/binboat/internal/backup"
+	"github.com/sumitwaani2/binboat/internal/deployer"
+	"github.com/sumitwaani2/binboat/internal/edge"
+	"github.com/sumitwaani2/binboat/internal/layout"
+	"github.com/sumitwaani2/binboat/internal/metrics"
+	"github.com/sumitwaani2/binboat/internal/store"
+	"github.com/sumitwaani2/binboat/internal/supervisor"
 )
 
 //go:embed templates/*.html
@@ -38,8 +38,8 @@ var templateFS embed.FS
 var staticFS embed.FS
 
 const (
-	sessionCookie = "__Host-dootd"
-	flashCookie   = "__Host-dootd-flash"
+	sessionCookie = "__Host-binboat"
+	flashCookie   = "__Host-binboat-flash"
 )
 
 // Server is the dashboard.

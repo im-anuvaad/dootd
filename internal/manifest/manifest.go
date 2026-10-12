@@ -1,4 +1,4 @@
-// Package manifest parses and validates an app's dootd.toml
+// Package manifest parses and validates an app's binboat.toml
 // (docs/app-contract.md §2).
 package manifest
 
@@ -12,15 +12,15 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/sumitwaani2/dootd/internal/app"
+	"github.com/sumitwaani2/binboat/internal/app"
 )
 
 // FileName is the manifest file name at the app root.
-const FileName = "dootd.toml"
+const FileName = "binboat.toml"
 
 const maxSize = 64 << 10
 
-// Manifest is a validated dootd.toml (contract 2: it only says how to run
+// Manifest is a validated binboat.toml (contract 3: it only says how to run
 // the app; the app is built by its release workflow).
 type Manifest struct {
 	Contract   int
@@ -34,7 +34,7 @@ type raw struct {
 	HealthPath *string `toml:"health_path"`
 }
 
-// Load reads dir/dootd.toml and validates it.
+// Load reads dir/binboat.toml and validates it.
 func Load(dir string) (*Manifest, error) {
 	p := filepath.Join(dir, FileName)
 	f, err := os.Open(p)
@@ -67,22 +67,15 @@ func Parse(b []byte) (*Manifest, error) {
 	}
 	var errs []error
 	for _, k := range md.Undecoded() {
-		switch k.String() {
-		case "zig_version", "build":
-			errs = append(errs, fmt.Errorf("%s is not used any more: the app is built by its release workflow (docs/app-contract.md §2); remove it", k))
-		default:
-			errs = append(errs, fmt.Errorf("unknown key %q", k.String()))
-		}
+		errs = append(errs, fmt.Errorf("unknown key %q", k.String()))
 	}
 	m := &Manifest{HealthPath: app.DefaultHealthPath}
 
 	switch {
 	case r.Contract == nil:
 		errs = append(errs, fmt.Errorf("contract is required (use contract = %d)", app.ContractVersion))
-	case *r.Contract == 1:
-		errs = append(errs, errors.New("contract = 1 (dootd builds the app) is no longer supported: build it in GitHub Actions and use contract = 2 (docs/app-contract.md §2)"))
 	case *r.Contract != app.ContractVersion:
-		errs = append(errs, fmt.Errorf("contract = %d is not supported by this dootd (supported: %d)", *r.Contract, app.ContractVersion))
+		errs = append(errs, fmt.Errorf("contract = %d is not supported by this binboat (supported: %d)", *r.Contract, app.ContractVersion))
 	default:
 		m.Contract = *r.Contract
 	}

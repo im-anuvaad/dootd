@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/store"
+	"github.com/sumitwaani2/binboat/internal/store"
 )
 
 // One-time password (docs/architecture.md). The installer
-// (`dootd setup-host`) creates it; signing in with it gives a session that
+// (`binboat setup-host`) creates it; signing in with it gives a session that
 // can only set the admin email and password.
 const (
 	SettingSetupPassword = "setup_password"
@@ -38,7 +38,7 @@ type setupRecord struct {
 
 // NewSetupPassword creates a new one-time password, replacing any previous
 // one, and returns it with its expiry. Only its argon2id hash is stored.
-// dootd must not be running (the installer stops it first), because the
+// binboat must not be running (the installer stops it first), because the
 // service caches the state in memory.
 func NewSetupPassword(ctx context.Context, db *store.Store) (string, time.Time, error) {
 	var b strings.Builder

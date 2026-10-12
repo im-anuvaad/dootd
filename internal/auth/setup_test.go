@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/store"
+	"github.com/sumitwaani2/binboat/internal/store"
 )
 
 func openStore(t *testing.T) *store.Store {
 	t.Helper()
-	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "dootd.db"))
+	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "binboat.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,7 +12,7 @@ import (
 
 func TestOpenFreshAndReopen(t *testing.T) {
 	ctx := context.Background()
-	p := filepath.Join(t.TempDir(), "dootd.db")
+	p := filepath.Join(t.TempDir(), "binboat.db")
 	ms, err := loadMigrations(embeddedMigrations)
 	if err != nil {
 		t.Fatal(err)

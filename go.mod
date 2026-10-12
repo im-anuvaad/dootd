@@ -1,4 +1,4 @@
-module github.com/sumitwaani2/dootd
+module github.com/sumitwaani2/binboat
 
 go 1.27.1
 

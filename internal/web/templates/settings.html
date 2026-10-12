@@ -14,7 +14,7 @@
     {{template "csrf" $csrf}}
     <label class="wide">{{if .TokenSet}}Replace API token{{else}}API token{{end}}
       <input type="password" name="token" autocomplete="off" required>
-      <small>Permissions: Zone Read, DNS Edit, SSL and Certificates Edit, Zone Settings Edit (<a href="https://github.com/sumitwaani2/dootd#before-you-start" target="_blank" rel="noopener">how to create it</a>).</small></label>
+      <small>Permissions: Zone Read, DNS Edit, SSL and Certificates Edit, Zone Settings Edit (<a href="https://github.com/sumitwaani2/binboat#before-you-start" target="_blank" rel="noopener">how to create it</a>).</small></label>
     <div class="wide buttons"><button>Verify and save</button></div>
   </form>
   {{with .LastError}}<p class="error pre">{{.}}</p>{{end}}
@@ -56,8 +56,8 @@
   {{end}}
   <form method="post" action="/settings/dashboard-domain" class="grid" {{if .Dashboard}}data-confirm="Move the dashboard to the new domain? You sign in again there, and the old domain's DNS record and certificate are removed."{{end}}>
     {{template "csrf" $csrf}}
-    <label class="wide">{{if .Dashboard}}New domain{{else}}Domain{{end}} <input name="domain" placeholder="dootd.example.com" required {{if not .TokenSet}}disabled{{end}}>
-      <small>{{if .TokenSet}}Must be in one of your Cloudflare zones. dootd creates the DNS record and the certificate.{{else}}Save the Cloudflare token first.{{end}}</small></label>
+    <label class="wide">{{if .Dashboard}}New domain{{else}}Domain{{end}} <input name="domain" placeholder="binboat.example.com" required {{if not .TokenSet}}disabled{{end}}>
+      <small>{{if .TokenSet}}Must be in one of your Cloudflare zones. binboat creates the DNS record and the certificate.{{else}}Save the Cloudflare token first.{{end}}</small></label>
     <div class="wide buttons"><button {{if not .TokenSet}}disabled{{end}}>Save domain</button></div>
   </form>
   {{end}}
@@ -74,7 +74,7 @@
     {{template "csrf" $csrf}}
     <label class="wide">{{if .Data.GitHubSet}}Replace token{{else}}Personal access token{{end}}
       <input type="password" name="token" autocomplete="off" placeholder="github_pat_…">
-      <small>Fine-grained token with <b>Contents: Read-only</b> on your app repositories: dootd lists their releases and downloads the release files.</small></label>
+      <small>Fine-grained token with <b>Contents: Read-only</b> on your app repositories: binboat lists their releases and downloads the release files.</small></label>
     <div class="wide buttons"><button>Save token</button>
     {{if .Data.GitHubSet}}<button name="remove" value="1" class="link" data-confirm-click="Remove the GitHub token?">remove token</button>{{end}}</div>
   </form>
@@ -83,7 +83,7 @@
 
 <section class="card" id="backups">
   <h2>Backups</h2>
-  <p class="muted">App databases are backed up {{.Data.Policy}}, into one folder per app at the root of the bucket (<code>&lt;app&gt;/</code>). Works with Cloudflare R2, Backblaze B2, AWS S3, MinIO or any S3-compatible storage; use a bucket for dootd only.</p>
+  <p class="muted">App databases are backed up {{.Data.Policy}}, into one folder per app at the root of the bucket (<code>&lt;app&gt;/</code>). Works with Cloudflare R2, Backblaze B2, AWS S3, MinIO or any S3-compatible storage; use a bucket for binboat only.</p>
   {{with .Data.S3}}<p>Bucket <b>{{.Bucket}}</b> at {{.Endpoint}} (region {{.Region}}, key <code>{{.AccessKey}}</code>). The secret is stored encrypted.</p>{{end}}
   <form method="post" action="/settings/s3" class="grid">
     {{template "csrf" $csrf}}

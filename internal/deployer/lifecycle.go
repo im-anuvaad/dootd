@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sumitwaani2/dootd/internal/supervisor"
+	"github.com/sumitwaani2/binboat/internal/supervisor"
 )
 
 // ErrBusy is returned while a deployment of the app is queued or running.
@@ -138,7 +138,7 @@ func (d *Deployer) StartReserved(ctx context.Context, name string) error {
 	return a.Start(ctx)
 }
 
-// StopApp stops an app and keeps it stopped across dootd restarts.
+// StopApp stops an app and keeps it stopped across binboat restarts.
 func (d *Deployer) StopApp(ctx context.Context, name string) error {
 	a := d.Supervisor.Get(name)
 	if a == nil {

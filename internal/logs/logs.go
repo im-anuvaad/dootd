@@ -6,7 +6,7 @@
 //
 //	2026-09-27T16:11:39.123Z out   hello world
 //	2026-09-27T16:11:39.456Z err   something went wrong
-//	2026-09-27T16:11:40.000Z dootd started (pid 1234)
+//	2026-09-27T16:11:40.000Z binboat started (pid 1234)
 package logs
 
 import (
@@ -25,7 +25,7 @@ import (
 const (
 	Stdout = "out"
 	Stderr = "err"
-	System = "dootd" // lines written by dootd about the app (start, exit, OOM)
+	System = "binboat" // lines written by binboat about the app (start, exit, OOM)
 )
 
 // Defaults (docs/architecture.md).
@@ -74,7 +74,7 @@ type Log struct {
 }
 
 // Open opens (appending to) the log at path and preloads the ring buffer
-// from the tail of the existing file so history survives dootd restarts.
+// from the tail of the existing file so history survives binboat restarts.
 func Open(path string, o Options) (*Log, error) {
 	if o.MaxSize <= 0 {
 		o.MaxSize = DefaultMaxSize
@@ -114,7 +114,7 @@ func (l *Log) openFile() error {
 }
 
 // preload fills the ring from the tail of app.log.1 + app.log (the newest
-// ~512 KB), so history survives dootd restarts and recent rotations.
+// ~512 KB), so history survives binboat restarts and recent rotations.
 func (l *Log) preload() {
 	const budget = 512 << 10
 	cur := readTail(l.path, budget)
@@ -248,7 +248,7 @@ func (l *Log) rotate() error {
 
 func (l *Log) reportErr(err error) {
 	if !l.errShown {
-		fmt.Fprintf(os.Stderr, "dootd: log %s: %v (further errors suppressed)\n", l.path, err)
+		fmt.Fprintf(os.Stderr, "binboat: log %s: %v (further errors suppressed)\n", l.path, err)
 		l.errShown = true
 	}
 }

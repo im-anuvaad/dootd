@@ -9,15 +9,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/apps"
-	"github.com/sumitwaani2/dootd/internal/auth"
-	"github.com/sumitwaani2/dootd/internal/backup"
-	"github.com/sumitwaani2/dootd/internal/deployer"
-	"github.com/sumitwaani2/dootd/internal/edge"
-	"github.com/sumitwaani2/dootd/internal/github"
-	"github.com/sumitwaani2/dootd/internal/hostinfo"
-	"github.com/sumitwaani2/dootd/internal/metrics"
-	"github.com/sumitwaani2/dootd/internal/supervisor"
+	"github.com/sumitwaani2/binboat/internal/apps"
+	"github.com/sumitwaani2/binboat/internal/auth"
+	"github.com/sumitwaani2/binboat/internal/backup"
+	"github.com/sumitwaani2/binboat/internal/deployer"
+	"github.com/sumitwaani2/binboat/internal/edge"
+	"github.com/sumitwaani2/binboat/internal/github"
+	"github.com/sumitwaani2/binboat/internal/hostinfo"
+	"github.com/sumitwaani2/binboat/internal/metrics"
+	"github.com/sumitwaani2/binboat/internal/supervisor"
 )
 
 const settingGitHubLogin = "github_login"
@@ -78,7 +78,7 @@ func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusTooManyRequests
 		} else if !errors.Is(err, auth.ErrInvalidLogin) && !errors.Is(err, auth.ErrNoAdmin) && !errors.Is(err, auth.ErrSetupInvalid) {
 			s.Log.Error("login", "err", err)
-			err = errors.New("sign-in failed; see the dootd logs")
+			err = errors.New("sign-in failed; see the binboat logs")
 			status = http.StatusInternalServerError
 		}
 		s.Log.Warn("failed sign-in", "ip", ip, "one_time", oneTime, "reason", err)

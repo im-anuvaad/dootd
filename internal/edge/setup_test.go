@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/secrets"
-	"github.com/sumitwaani2/dootd/internal/store"
+	"github.com/sumitwaani2/binboat/internal/secrets"
+	"github.com/sumitwaani2/binboat/internal/store"
 )
 
 // TestSetupAddress runs the real listener on loopback. 127.0.0.1 is not a
@@ -29,7 +29,7 @@ func TestSetupAddress(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	dir := t.TempDir()
-	st, err := store.Open(ctx, filepath.Join(dir, "dootd.db"))
+	st, err := store.Open(ctx, filepath.Join(dir, "binboat.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestSetupAddress(t *testing.T) {
 	if err != nil || code != 200 || body != "dashboard" {
 		t.Fatalf("setup open: %d %q %v", code, body, err)
 	}
-	if cs.PeerCertificates[0].Subject.CommonName != "dootd setup" {
+	if cs.PeerCertificates[0].Subject.CommonName != "binboat setup" {
 		t.Fatalf("certificate %v", cs.PeerCertificates[0].Subject)
 	}
 	if ip := sawIP.Load(); ip != "127.0.0.1" {
@@ -100,16 +100,16 @@ func TestSetupAddress(t *testing.T) {
 	// Close setup: dashboard domain ready (certificate + AOP enforced) and
 	// no one-time password pending.
 	m.mu.Lock()
-	m.dashHost = "dootd.example.test"
+	m.dashHost = "binboat.example.test"
 	m.mu.Unlock()
-	m.Router.SetDashboardHost("dootd.example.test")
-	certPEM, keyPEM := selfSigned(t, "dootd.example.test")
-	if _, err := m.Certs.Put("dootd.example.test", certPEM, keyPEM); err != nil {
+	m.Router.SetDashboardHost("binboat.example.test")
+	certPEM, keyPEM := selfSigned(t, "binboat.example.test")
+	if _, err := m.Certs.Put("binboat.example.test", certPEM, keyPEM); err != nil {
 		t.Fatal(err)
 	}
 	zone := &ZoneStatus{ID: "z1", Name: "example.test"}
 	m.mu.Lock()
-	m.hostZone["dootd.example.test"] = "z1"
+	m.hostZone["binboat.example.test"] = "z1"
 	m.enforce["z1"] = true
 	m.zoneState["z1"] = zone
 	m.mu.Unlock()
@@ -142,7 +142,7 @@ func TestSetupAddress(t *testing.T) {
 	// the mode cannot be read (token without Zone Settings) or a per-host
 	// rule overrides a Flexible zone. It is remembered, per domain.
 	m.mu.Lock()
-	zone.SSLMode, zone.Warning = "", "dootd cannot read the SSL/TLS mode"
+	zone.SSLMode, zone.Warning = "", "binboat cannot read the SSL/TLS mode"
 	m.mu.Unlock()
 	if !m.SetupOpen() {
 		t.Fatal("unknown SSL mode: setup should stay open")
@@ -151,16 +151,16 @@ func TestSetupAddress(t *testing.T) {
 	if !m.SetupOpen() {
 		t.Fatal("a visit to another domain must not close setup")
 	}
-	m.DashboardReached("dootd.example.test")
+	m.DashboardReached("binboat.example.test")
 	if m.SetupOpen() {
 		t.Fatal("setup should be closed after a visit through Cloudflare: " + m.DashboardProblem())
 	}
-	if v, ok, _ := st.GetSetting(ctx, settingDashboardReached); !ok || string(v) != "dootd.example.test" {
+	if v, ok, _ := st.GetSetting(ctx, settingDashboardReached); !ok || string(v) != "binboat.example.test" {
 		t.Fatalf("reached state not saved: %q", v)
 	}
 	// A connection that was already open gets a pointer to the domain.
 	code, body, _, err = get("https://203.0.113.5/")
-	if err != nil || code != http.StatusForbidden || !strings.Contains(body, "https://dootd.example.test/") {
+	if err != nil || code != http.StatusForbidden || !strings.Contains(body, "https://binboat.example.test/") {
 		t.Fatalf("old connection after setup closed: %d %q %v", code, body, err)
 	}
 	// New direct connections are closed before TLS.
