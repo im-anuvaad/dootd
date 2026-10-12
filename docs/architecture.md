@@ -6,7 +6,7 @@ Reference for whoever maintains binboat. The rules for hosted apps are in [app-c
 
 A single static Go binary that hosts about 5 small server-rendered SQLite web apps (Go, Zig or C) on one Ubuntu 24.04+ VPS behind Cloudflare, for **one non-technical user**.
 
-- **One SSH command, then only the dashboard.** The installer prints a one-time password; the admin account, tokens, dashboard domain, bucket, apps, env vars, deploys, logs, backups and restores are all in the browser. No admin CLI, no config file, no optional features; one way to do each thing (D33).
+- **One SSH command, then only the dashboard.** The installer prints a one-time password; the admin account, tokens, dashboard domain, bucket, apps, env vars, deploys, logs, backups and restores are all in the browser. No admin CLI, no config file, no optional features; one way to do each thing (D33). The only other interface is a read-only status API (D47).
 - **binboat never builds.** Each app's GitHub Actions workflow tests and builds it and publishes a GitHub release; binboat downloads, verifies and runs it (D38).
 - **Cloudflare in front, Full (strict), origin reachable only through the user's own Cloudflare account** (IP filter + zone-level Authenticated Origin Pulls).
 - **SQLite backups** to any S3-compatible bucket, RPO ≤ 3 h.
@@ -27,7 +27,7 @@ internal/
   store/          SQLite (WAL, single writer), embedded migrations
   secrets/        master.key, AES-256-GCM seal/open with purpose as associated data
   auth/           argon2id, sessions, CSRF, rate limit, one-time password
-  web/            dashboard handlers, templates, static, SSE, SVG charts
+  web/            dashboard handlers, templates, static, SSE, SVG charts, read-only JSON API
   apps/           app registry (apps + sealed env), create/update/delete, restore on add
   edge/           listener, IP filter, setup address, certificates, AOP, router, proxy, Cloudflare sync
   cloudflare/     minimal REST client
@@ -67,7 +67,7 @@ All components are goroutines in one process (the systemd unit), talking through
 
 | Table | Content |
 |---|---|
-| `settings` | `dashboard_domain`, `dashboard_reached`, `setup_password` (argon2id hash, expiry, used), GitHub token*, Cloudflare token*, `s3_config`*, Cloudflare IP ranges |
+| `settings` | `dashboard_domain`, `dashboard_reached`, `setup_password` (argon2id hash, expiry, used), `api_token` (SHA-256, created, last used), GitHub token*, Cloudflare token*, `s3_config`*, Cloudflare IP ranges |
 | `users` | id 1 only: email, argon2id hash |
 | `sessions` | SHA-256 of the token, csrf, created/last seen, ip, user agent, `setup` flag |
 | `apps`, `app_env` | name, repo, domain, port, limits; env values* |
@@ -171,6 +171,7 @@ Every 10 s: host (`/proc/stat`, `/proc/meminfo`, `/proc/loadavg`, `statfs`), bin
 - **CSRF:** every POST needs `Origin` (or `Referer`) = `https://<Host>` and, when signed in, the session's token. Bodies ≤ 256 KB.
 - **Headers:** strict CSP (`default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: same-origin`, HSTS, `no-store`. Flash messages use a 60 s cookie.
 - Times are stored and scheduled in UTC and shown in the server's timezone with its name (D42).
+- **Status API** (D47, [api.md](api.md)): `GET /api/v1/status`, `/apps`, `/apps/{name}`, JSON, nothing else (other methods 405). One token `bbt_` + 32 random bytes, created/rotated on the Account page with the current password, shown once, only its SHA-256 stored; rotating revokes the old one. `Authorization: Bearer` only (session cookies are ignored, so no CSRF surface); refused on setup connections; wrong tokens count towards the sign-in rate limit. It reads the same data as the dashboard pages and never exposes env values or secrets.
 
 ## 11. Budget (measured on the real VPS, 1 vCPU, 5 apps)
 
@@ -186,7 +187,7 @@ Most of the RSS is the binary's own code pages, so every new dependency costs me
 
 ## 12. Changing binboat
 
-- `make lint` (gofmt, vet, staticcheck) and `make test` (`-race`) run in CI on every PR with amd64/arm64 builds. Unit tests cover the risky pure parts: secrets, store and migrations, the one-time password, `binboat.toml`, tarball unpacking, backup archives, app names, the health check, the setup address, the GitHub client and page rendering.
+- `make lint` (gofmt, vet, staticcheck) and `make test` (`-race`) run in CI on every PR with amd64/arm64 builds. Unit tests cover the risky pure parts: secrets, store and migrations, the one-time password, `binboat.toml`, tarball unpacking, backup archives, app names, the health check, the setup address, the GitHub client, page rendering, and the status API (token lifecycle, auth rules, responses).
 - There is **no automated end-to-end suite** (D44). Anything touching processes, cgroups, deploys, backups or the edge must be tried on a real Ubuntu VPS with a real Cloudflare zone: tag a pre-release (`vX.Y.Z-rc1`, published but not "latest"), install it with `BINBOAT_VERSION=vX.Y.Z-rc1` in front of `bash` in the install command, and go through the affected flows in the dashboard. Useful checks: install/update, setup address closes, deploy + rollback + a broken release, restart/stop leaves no processes, backup + restore, direct IP access refused, no 520/521 through Cloudflare.
 - Release: push a `vX.Y.Z` tag; the release workflow lints, tests, builds both binaries, writes `checksums.txt` and publishes them with `install.sh`. Tags with `-` are pre-releases.
 - A schema change is a new numbered migration. An older binary then refuses the database, so going back to an earlier release after such an update needs a copy of `binboat.db` from before it; binboat doesn't make one.
@@ -230,3 +231,4 @@ Most of the RSS is the binary's own code pages, so every new dependency costs me
 | D44 | No automated end-to-end suite; unit tests + a real-VPS check for risky changes | single-user tool that rarely changes; the real VPS found what the fakes couldn't |
 | D45 | `GOMEMLIMIT` = 90% of the app's memory limit, unless the app sets it | Go ignores cgroup limits, so its GC would otherwise let the kernel OOM-kill the app; other languages ignore the variable |
 | D46 | Back up SQLite databases only; other `DATA_DIR` files are the app's responsibility | keeps backups small, fast and verifiable; binboat is not a file-backup tool |
+| D47 | A read-only status API with one rotatable bearer token | agents and scripts can answer "is it up?" without a browser; read-only keeps the dashboard the only way to change things (D33) and makes a leaked token low-impact |

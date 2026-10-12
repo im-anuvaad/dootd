@@ -172,27 +172,29 @@ func (s *Server) appRows(ctx context.Context) ([]AppRow, error) {
 func (s *Server) warnings(r *http.Request, rows []AppRow) []string {
 	ctx := r.Context()
 	var ws []string
-	st := s.Edge.Status(ctx)
-	if !st.TokenSet {
-		ws = append(ws, "Setup: no Cloudflare token is set, so DNS records and certificates cannot be managed. Add one in Settings → Cloudflare.")
-	}
-	problem := s.Edge.DashboardProblem()
-	switch {
-	case st.Dashboard == "":
-		ws = append(ws, "Setup: no dashboard domain yet, so the dashboard is only reachable on the server's IP address. Set one in Settings → Dashboard domain.")
-	case problem != "":
-		ws = append(ws, "Setup: the dashboard domain "+st.Dashboard+" is not ready yet: "+problem+". Until it is ready the dashboard also answers on the server's IP address.")
-	case edge.IsDirect(r):
-		ws = append(ws, "You are on the setup address. The dashboard is at https://"+st.Dashboard+"/ and this address stops answering once the one-time password is used or expires.")
-	}
-	for _, z := range st.Zones {
-		if z.Warning != "" && z.Warning != problem {
-			ws = append(ws, z.Name+": "+z.Warning)
+	if s.Edge != nil {
+		st := s.Edge.Status(ctx)
+		if !st.TokenSet {
+			ws = append(ws, "Setup: no Cloudflare token is set, so DNS records and certificates cannot be managed. Add one in Settings → Cloudflare.")
 		}
-	}
-	for _, h := range st.Hosts {
-		if h.Error != "" {
-			ws = append(ws, h.Host+": "+h.Error)
+		problem := s.Edge.DashboardProblem()
+		switch {
+		case st.Dashboard == "":
+			ws = append(ws, "Setup: no dashboard domain yet, so the dashboard is only reachable on the server's IP address. Set one in Settings → Dashboard domain.")
+		case problem != "":
+			ws = append(ws, "Setup: the dashboard domain "+st.Dashboard+" is not ready yet: "+problem+". Until it is ready the dashboard also answers on the server's IP address.")
+		case edge.IsDirect(r):
+			ws = append(ws, "You are on the setup address. The dashboard is at https://"+st.Dashboard+"/ and this address stops answering once the one-time password is used or expires.")
+		}
+		for _, z := range st.Zones {
+			if z.Warning != "" && z.Warning != problem {
+				ws = append(ws, z.Name+": "+z.Warning)
+			}
+		}
+		for _, h := range st.Hosts {
+			if h.Error != "" {
+				ws = append(ws, h.Host+": "+h.Error)
+			}
 		}
 	}
 	if _, ok, _ := s.Store.GetSetting(ctx, deployer.SettingGitHubToken); !ok {
@@ -595,8 +597,37 @@ func (s *Server) setDashboardDomain(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------- account
 
 func (s *Server) accountPage(w http.ResponseWriter, r *http.Request) {
+	s.render(w, r, http.StatusOK, "account", "Account", "account", s.accountData(r, ""))
+}
+
+func (s *Server) accountData(r *http.Request, newToken string) map[string]any {
 	sessions, _ := s.Auth.Sessions(r.Context(), session(r))
-	s.render(w, r, http.StatusOK, "account", "Account", "account", map[string]any{"Sessions": sessions})
+	d := map[string]any{"Sessions": sessions, "NewAPIToken": newToken, "APIBase": "https://" + r.Host + "/api/" + APIVersion}
+	if t, ok, err := s.Auth.APITokenInfo(r.Context()); err == nil && ok {
+		d["APIToken"] = t
+	}
+	return d
+}
+
+// rotateAPIToken creates a new API token (replacing any old one) and shows
+// it once, in this response: it is never stored, put in a cookie or shown
+// again.
+func (s *Server) rotateAPIToken(w http.ResponseWriter, r *http.Request) {
+	tok, err := s.Auth.RotateAPIToken(r.Context(), r.PostFormValue("current"), edge.ClientIP(r))
+	if err != nil {
+		redirect(w, r, "/account#api", err, "")
+		return
+	}
+	s.Log.Info("API token created", "ip", edge.ClientIP(r))
+	s.render(w, r, http.StatusOK, "account", "Account", "account", s.accountData(r, tok))
+}
+
+func (s *Server) revokeAPIToken(w http.ResponseWriter, r *http.Request) {
+	err := s.Auth.RevokeAPIToken(r.Context())
+	if err == nil {
+		s.Log.Info("API token revoked", "ip", edge.ClientIP(r))
+	}
+	redirect(w, r, "/account#api", err, "API token revoked. Requests with it are refused from now on.")
 }
 
 func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request) {
