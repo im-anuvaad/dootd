@@ -1,4 +1,4 @@
-// Command binboat is a minimal single-binary PaaS for small Zig/C + SQLite web apps.
+// Command binboat is a minimal single-binary PaaS for small SQLite web apps written in Go, Zig or C.
 //
 // It has no admin CLI: install.sh runs `binboat setup-host`, systemd runs
 // `binboat serve`, and everything else happens in the dashboard
@@ -13,7 +13,7 @@ import (
 	"github.com/sumitwaani2/binboat/internal/buildinfo"
 )
 
-const usage = `binboat - minimal PaaS for small Zig/C + SQLite web apps
+const usage = `binboat - minimal PaaS for small SQLite web apps (Go, Zig or C)
 
 Install or update it with:
   curl -fsSL https://github.com/sumitwaani2/binboat/releases/latest/download/install.sh | sudo bash

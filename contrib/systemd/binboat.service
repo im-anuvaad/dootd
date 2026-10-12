@@ -1,5 +1,5 @@
 [Unit]
-Description=binboat - minimal PaaS for small Zig/C + SQLite apps
+Description=binboat - minimal PaaS for small SQLite apps (Go, Zig or C)
 Documentation=https://github.com/sumitwaani2/binboat
 After=network-online.target
 Wants=network-online.target

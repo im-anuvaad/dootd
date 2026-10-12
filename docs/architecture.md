@@ -4,7 +4,7 @@ Reference for whoever maintains binboat. The rules for hosted apps are in [app-c
 
 ## 1. What and why
 
-A single static Go binary that hosts about 5 small server-rendered Zig/C + SQLite web apps on one Ubuntu 24.04+ VPS behind Cloudflare, for **one non-technical user**.
+A single static Go binary that hosts about 5 small server-rendered SQLite web apps (Go, Zig or C) on one Ubuntu 24.04+ VPS behind Cloudflare, for **one non-technical user**.
 
 - **One SSH command, then only the dashboard.** The installer prints a one-time password; the admin account, tokens, dashboard domain, bucket, apps, env vars, deploys, logs, backups and restores are all in the browser. No admin CLI, no config file, no optional features; one way to do each thing (D33).
 - **binboat never builds.** Each app's GitHub Actions workflow tests and builds it and publishes a GitHub release; binboat downloads, verifies and runs it (D38).
@@ -113,7 +113,7 @@ Token permissions: Zone Read, DNS Edit, SSL and Certificates Edit, Zone Settings
 
 - **Names** come from the repository name: lowercased, `_`/`.` → `-`, 2–24 chars `a-z0-9-`, starting with a letter (D36). One repo = one app. Ports are assigned once from 20001 up.
 - **Users:** `binboat-<app>` (system, no home, `nologin`); `data/` and `tmp/` 0700 owned by it; releases root-owned; other apps' and binboat's files unreadable.
-- **cgroups** (D2): binboat owns `system.slice/binboat.service/` (`Delegate=yes`), moves itself into `supervisor/`, apps run in `apps/<app>/` with `memory.max` (default 256M), `memory.swap.max=0`, `memory.zswap.max=0`, `cpu.max` (1 core), `pids.max` (256); no `memory.high` (D11); `RLIMIT_NOFILE` 4096 via prlimit. Processes start inside their cgroup (`CLONE_INTO_CGROUP`) with the app's uid/gid, `Setpgid`, `Pdeathsig=SIGKILL`, cwd = current release, a clean env (`PATH`, `LANG`, contract vars, user env). Killing = SIGKILL every PID in the cgroup until empty, **never `cgroup.kill`** (D10: after it was written once, later `CLONE_INTO_CGROUP` children died instantly). `memory.events` OOM kills are recorded.
+- **cgroups** (D2): binboat owns `system.slice/binboat.service/` (`Delegate=yes`), moves itself into `supervisor/`, apps run in `apps/<app>/` with `memory.max` (default 256M), `memory.swap.max=0`, `memory.zswap.max=0`, `cpu.max` (1 core), `pids.max` (256); no `memory.high` (D11); `RLIMIT_NOFILE` 4096 via prlimit. Processes start inside their cgroup (`CLONE_INTO_CGROUP`) with the app's uid/gid, `Setpgid`, `Pdeathsig=SIGKILL`, cwd = current release, a clean env (`PATH`, `LANG`, contract vars, user env, and `GOMEMLIMIT` = 90% of `memory.max` unless the user sets one; D45). Killing = SIGKILL every PID in the cgroup until empty, **never `cgroup.kill`** (D10: after it was written once, later `CLONE_INTO_CGROUP` children died instantly). `memory.events` OOM kills are recorded.
 - **Supervisor:** `stopped → starting → running → stopping`, plus `crashed`, `deploying`. Running = TCP connect then `GET health_path` 2xx/3xx within 30 s. Stop = SIGTERM, 10 s, kill the cgroup. Restarts with backoff 1 s → 60 s; 5 exits in 5 min → `crashed` until the user restarts. At start, apps with desired state `running` start one at a time. A binboat restart restarts all apps (seconds of downtime, accepted).
 - **Logs:** stdout/stderr lines get a timestamp and stream tag → `app.log` (10 MB × 3) + a 1000-line ring buffer streamed to the dashboard over SSE; lines > 16 KB are split.
 - **Config changes** (env, limits) are stored at once and apply on restart/deploy; the page says "restart needed" (D20). Env names `PORT`, `HOST`, `DATA_DIR`, `TMPDIR`, `BINBOAT_*` are reserved.
@@ -149,6 +149,7 @@ A failure in 2–5 never touches the running app, and errors name the cause (mis
 | Local copies | newest 2 per app (D22); not-yet-uploaded ones kept until the retention ends |
 | Bucket | `<app>/<UTC time>-<kind>-<id>.tar.zst` (D37); S3 settings sealed, saved only after a test upload/read/delete; empty secret keeps the old one; path-style SigV4 |
 
+- **Scope (D46):** SQLite databases only. Other files in `DATA_DIR` survive deploys (only `TMPDIR` is wiped) but are the app's own business to protect.
 - **What:** every file under `DATA_DIR` starting with `SQLite format 3\0` (sub-folders included), skipping `-wal`/`-shm`/`-journal` and `.pre-restore-*`.
 - **Snapshot:** `VACUUM INTO` with `busy_timeout=10000` while the app runs, then `PRAGMA quick_check`; sidecar files binboat creates are chowned back to the app user.
 - **Archive:** tar (first `manifest.json`: app, kind, time, release, binboat version, path/size/SHA-256 per DB) + zstd; its SHA-256 goes into `backups`.
@@ -227,3 +228,5 @@ Most of the RSS is the binary's own code pages, so every new dependency costs me
 | D42 | UTC everywhere, shown in server time with the zone name | the server's timezone never changes behaviour |
 | D43 | Require AOP 10 min after Cloudflare reports it active (and after re-uploads); log handshake errors; check the zone when a domain is saved | Cloudflare's edge rolls certs out over minutes (2–5 % 520s otherwise); the cause had been invisible; typos failed silently |
 | D44 | No automated end-to-end suite; unit tests + a real-VPS check for risky changes | single-user tool that rarely changes; the real VPS found what the fakes couldn't |
+| D45 | `GOMEMLIMIT` = 90% of the app's memory limit, unless the app sets it | Go ignores cgroup limits, so its GC would otherwise let the kernel OOM-kill the app; other languages ignore the variable |
+| D46 | Back up SQLite databases only; other `DATA_DIR` files are the app's responsibility | keeps backups small, fast and verifiable; binboat is not a file-backup tool |

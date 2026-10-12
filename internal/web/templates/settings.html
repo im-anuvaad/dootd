@@ -24,10 +24,10 @@
     <div class="buttons"><small class="muted">Also synced every 6 hours and after every change.</small>
       <form method="post" action="/settings/edge-sync" class="inline">{{template "csrf" $csrf}}<button>Sync now</button></form></div>
   </div>
-  <table>
+  <table class="stack">
     <thead><tr><th>Domain</th><th>App</th><th>Zone</th><th>DNS</th><th>Certificate until</th><th>Problem</th></tr></thead>
     <tbody>{{range .Hosts}}
-      <tr><td>{{.Host}}</td><td>{{if .App}}<a href="/apps/{{.App}}">{{.App}}</a>{{else}}dashboard{{end}}</td><td>{{.Zone}}</td><td class="nowrap">{{if .DNS}}{{.DNS}}{{else}}<span class="muted">-</span>{{end}}</td><td class="nowrap">{{date .CertUntil}}</td><td class="error-text">{{.Error}}</td></tr>
+      <tr><td data-label="Domain">{{.Host}}</td><td data-label="App">{{if .App}}<a href="/apps/{{.App}}">{{.App}}</a>{{else}}dashboard{{end}}</td><td data-label="Zone">{{.Zone}}</td><td class="nowrap" data-label="DNS">{{if .DNS}}{{.DNS}}{{else}}<span class="muted">-</span>{{end}}</td><td class="nowrap" data-label="Certificate until">{{date .CertUntil}}</td><td class="error-text" data-label="Problem">{{.Error}}</td></tr>
     {{else}}<tr><td colspan="6" class="muted">No domains yet: set the dashboard domain below, or give an app a domain.</td></tr>{{end}}</tbody>
   </table>
   {{if .Zones}}

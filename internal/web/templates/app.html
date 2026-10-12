@@ -59,14 +59,14 @@
 <section class="card">
   <h2>Kept releases</h2>
   {{with $.Data.Releases}}
-  <table>
+  <table class="stack">
     <thead><tr><th>Release</th><th>Name</th><th>SHA-256</th><th>Deployed</th><th></th></tr></thead>
     <tbody>{{range .}}
     <tr>
-      <td class="nowrap"><code>{{.ID}}</code>{{if .Current}} <span class="badge s-running">current</span>{{end}}</td>
-      <td>{{if ne .Subject .ID}}{{.Subject}}{{end}}</td>
-      <td><code>{{short .SHA256}}</code></td>
-      <td>{{ago .CreatedAt}}</td>
+      <td class="nowrap" data-label="Release"><code>{{.ID}}</code>{{if .Current}} <span class="badge s-running">current</span>{{end}}</td>
+      <td data-label="Name">{{if ne .Subject .ID}}{{.Subject}}{{end}}</td>
+      <td data-label="SHA-256"><code>{{short .SHA256}}</code></td>
+      <td data-label="Deployed">{{ago .CreatedAt}}</td>
       <td class="end">{{if not .Current}}<form method="post" action="/apps/{{.App}}/rollback" class="inline" data-confirm="Switch to release {{.ID}}?">{{template "csrf" $csrf}}<input type="hidden" name="release" value="{{.ID}}"><button>Roll back</button></form>{{end}}</td>
     </tr>{{end}}
     </tbody>
@@ -77,13 +77,13 @@
 <section class="card">
   <h2>Deployments</h2>
   {{with $.Data.Deployments}}
-  <table>
+  <table class="stack">
     <thead><tr><th>#</th><th>Kind</th><th>Status</th><th>Release</th><th>Started</th><th>Took</th><th>Error</th></tr></thead>
     <tbody>{{range .}}
     <tr>
-      <td><a href="/deployments/{{.ID}}">#{{.ID}}</a></td><td>{{.Kind}}</td><td>{{template "state" .Status}}</td>
-      <td>{{if .ReleaseID}}<code>{{.ReleaseID}}</code>{{else}}<span class="muted">-</span>{{end}}</td><td>{{ago .StartedAt}}</td><td>{{dur .StartedAt .FinishedAt}}</td>
-      <td class="clip">{{.Error}}</td>
+      <td data-label="#"><a href="/deployments/{{.ID}}">#{{.ID}}</a></td><td data-label="Kind">{{.Kind}}</td><td data-label="Status">{{template "state" .Status}}</td>
+      <td data-label="Release">{{if .ReleaseID}}<code>{{.ReleaseID}}</code>{{else}}<span class="muted">-</span>{{end}}</td><td data-label="Started">{{ago .StartedAt}}</td><td data-label="Took">{{dur .StartedAt .FinishedAt}}</td>
+      <td class="clip" data-label="Error">{{.Error}}</td>
     </tr>{{end}}
     </tbody>
   </table>
@@ -98,15 +98,15 @@
   {{with .BackupProblem}}<p class="error">{{.}}</p>{{end}}
   <p class="muted">SQLite files in DATA_DIR are backed up {{$.Data.Policy}} (the newest is always kept), to the bucket folder <code>{{.Name}}/</code>. The last 2 are also kept on this server.{{if not $.Data.S3Set}} <b>No bucket is configured</b>, so they are only on this server.{{end}}</p>
   {{with $.Data.Backups}}
-  <table>
+  <table class="stack">
     <thead><tr><th>#</th><th>Taken</th><th>Kind</th><th>Status</th><th>Size</th><th>Where</th><th>Release</th><th></th></tr></thead>
     <tbody>{{range .}}
     <tr>
-      <td>#{{.ID}}</td><td class="nowrap">{{datetime .CreatedAt}} <small class="muted">{{ago .CreatedAt}}</small></td><td>{{.Kind}}</td>
-      <td>{{if eq .Status "ok"}}<span class="badge s-running">ok</span>{{else}}{{template "state" .Status}}{{end}}{{with .Error}} <small class="error-text">{{.}}</small>{{end}}</td>
-      <td>{{bytes .Size}}</td>
-      <td>{{if .Uploaded}}bucket{{end}}{{if and .Uploaded .LocalPath}} + {{end}}{{if .LocalPath}}server{{end}}</td>
-      <td>{{if .ReleaseID}}<code>{{.ReleaseID}}</code>{{else}}<span class="muted">-</span>{{end}}</td>
+      <td data-label="#">#{{.ID}}</td><td class="nowrap" data-label="Taken">{{datetime .CreatedAt}} <small class="muted">{{ago .CreatedAt}}</small></td><td data-label="Kind">{{.Kind}}</td>
+      <td data-label="Status">{{if eq .Status "ok"}}<span class="badge s-running">ok</span>{{else}}{{template "state" .Status}}{{end}}{{with .Error}} <small class="error-text">{{.}}</small>{{end}}</td>
+      <td data-label="Size">{{bytes .Size}}</td>
+      <td data-label="Where">{{if .Uploaded}}bucket{{end}}{{if and .Uploaded .LocalPath}} + {{end}}{{if .LocalPath}}server{{end}}</td>
+      <td data-label="Release">{{if .ReleaseID}}<code>{{.ReleaseID}}</code>{{else}}<span class="muted">-</span>{{end}}</td>
       <td class="end">{{if .Restorable}}<form method="post" action="/apps/{{$.Data.App.Name}}/restore" class="inline" data-confirm="Restore backup #{{.ID}} from {{datetime .CreatedAt}}? The app is stopped briefly; its current databases are moved to a .pre-restore folder.">{{template "csrf" $csrf}}<input type="hidden" name="id" value="{{.ID}}"><button>Restore</button></form>{{end}}</td>
     </tr>{{end}}
     </tbody>

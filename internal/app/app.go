@@ -25,7 +25,7 @@ const (
 
 // Limits are the per-app runtime resource limits.
 type Limits struct {
-	MemoryMax int64   // bytes; memory.high is set to 90% of this
+	MemoryMax int64   // bytes (memory.max); Go apps get GOMEMLIMIT at 90% of it
 	CPUMax    float64 // cores, e.g. 1.0 or 0.5
 	PidsMax   int
 }
