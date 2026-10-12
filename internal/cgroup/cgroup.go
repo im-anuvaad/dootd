@@ -1,11 +1,11 @@
-// Package cgroup manages dootd's cgroup v2 subtree.
+// Package cgroup manages binboat's cgroup v2 subtree.
 //
-// Under systemd with Delegate=yes dootd owns its service cgroup. Because
+// Under systemd with Delegate=yes binboat owns its service cgroup. Because
 // cgroup v2 forbids processes in non-leaf groups ("no internal processes"),
-// dootd first moves itself into a leaf and then creates this tree:
+// binboat first moves itself into a leaf and then creates this tree:
 //
-//	<root>/                 dootd.service (delegated)
-//	  supervisor/           dootd itself
+//	<root>/                 binboat.service (delegated)
+//	  supervisor/           binboat itself
 //	  apps/<app>/           app runtime processes
 package cgroup
 
@@ -29,7 +29,7 @@ import (
 // Mount is where the unified cgroup v2 hierarchy is mounted.
 const Mount = "/sys/fs/cgroup"
 
-// Kind is a top-level group under the dootd root.
+// Kind is a top-level group under the binboat root.
 type Kind string
 
 // Group kinds.
@@ -40,14 +40,14 @@ const (
 // wantedControllers are enabled wherever the kernel offers them.
 var wantedControllers = []string{"cpu", "memory", "pids", "io"}
 
-// Manager owns the dootd cgroup subtree.
+// Manager owns the binboat cgroup subtree.
 type Manager struct {
 	root        string
 	controllers map[string]bool // controllers enabled for app/build groups
 }
 
 // Setup prepares the subtree. rootOverride may be empty to use the cgroup
-// dootd is currently running in.
+// binboat is currently running in.
 func Setup(rootOverride string) (*Manager, error) {
 	var st unix.Statfs_t
 	if err := unix.Statfs(Mount, &st); err != nil || st.Type != unix.CGROUP2_SUPER_MAGIC {
@@ -73,7 +73,7 @@ func Setup(rootOverride string) (*Manager, error) {
 		return nil, fmt.Errorf("cgroup: create %s: %w", sup, err)
 	}
 	if err := writeFile(filepath.Join(sup, "cgroup.procs"), strconv.Itoa(os.Getpid())); err != nil {
-		return nil, fmt.Errorf("cgroup: move dootd into %s: %w", sup, err)
+		return nil, fmt.Errorf("cgroup: move binboat into %s: %w", sup, err)
 	}
 
 	// 2. Enable controllers at the root, then in apps/.
@@ -119,7 +119,7 @@ func (m *Manager) enableControllers(dir string) error {
 		if err := writeFile(filepath.Join(dir, "cgroup.subtree_control"), "+"+c); err != nil {
 			if errors.Is(err, syscall.EBUSY) {
 				return fmt.Errorf("cgroup: cannot enable controllers in %s because it still contains other processes; "+
-					"run dootd as a systemd service with Delegate=yes (see contrib/systemd/dootd.service)", dir)
+					"run binboat as a systemd service with Delegate=yes (see contrib/systemd/binboat.service)", dir)
 			}
 			return fmt.Errorf("cgroup: enable %s in %s: %w", c, dir, err)
 		}
@@ -168,7 +168,7 @@ func (m *Manager) Group(kind Kind, name string) (*Group, error) {
 }
 
 // ReapStale kills processes left in any app group, e.g. after a
-// dootd crash in a dev setup. It returns the names of groups it cleaned.
+// binboat crash in a dev setup. It returns the names of groups it cleaned.
 func (m *Manager) ReapStale(ctx context.Context) ([]string, error) {
 	var cleaned []string
 	for _, k := range []Kind{Apps} {

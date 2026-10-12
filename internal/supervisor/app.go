@@ -16,11 +16,11 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/sumitwaani2/dootd/internal/app"
-	"github.com/sumitwaani2/dootd/internal/cgroup"
-	"github.com/sumitwaani2/dootd/internal/layout"
-	"github.com/sumitwaani2/dootd/internal/logs"
-	"github.com/sumitwaani2/dootd/internal/users"
+	"github.com/sumitwaani2/binboat/internal/app"
+	"github.com/sumitwaani2/binboat/internal/cgroup"
+	"github.com/sumitwaani2/binboat/internal/layout"
+	"github.com/sumitwaani2/binboat/internal/logs"
+	"github.com/sumitwaani2/binboat/internal/users"
 )
 
 // State of an app.
@@ -459,7 +459,7 @@ func (a *App) startProcess(spec app.Spec) (*exec.Cmd, error) {
 }
 
 // environ builds the contract environment (docs/app-contract.md §3). The
-// process does not inherit dootd's environment.
+// process does not inherit binboat's environment.
 func (a *App) environ(spec app.Spec) []string {
 	env := map[string]string{
 		"PATH": "/usr/local/bin:/usr/bin:/bin",
@@ -469,14 +469,14 @@ func (a *App) environ(spec app.Spec) []string {
 		env[k] = v
 	}
 	contract := map[string]string{
-		"PORT":           strconv.Itoa(spec.Port),
-		"HOST":           "127.0.0.1",
-		"DATA_DIR":       a.dataDir(spec),
-		"TMPDIR":         a.tmpDir(spec),
-		"DOOTD_APP":      spec.Name,
-		"DOOTD_DOMAIN":   spec.Domain,
-		"DOOTD_RELEASE":  spec.ReleaseID,
-		"DOOTD_CONTRACT": strconv.Itoa(app.ContractVersion),
+		"PORT":             strconv.Itoa(spec.Port),
+		"HOST":             "127.0.0.1",
+		"DATA_DIR":         a.dataDir(spec),
+		"TMPDIR":           a.tmpDir(spec),
+		"BINBOAT_APP":      spec.Name,
+		"BINBOAT_DOMAIN":   spec.Domain,
+		"BINBOAT_RELEASE":  spec.ReleaseID,
+		"BINBOAT_CONTRACT": strconv.Itoa(app.ContractVersion),
 	}
 	for k, v := range contract {
 		env[k] = v

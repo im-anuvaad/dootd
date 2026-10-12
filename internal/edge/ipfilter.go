@@ -1,4 +1,4 @@
-// Package edge is dootd's public front door: a :443 listener that only
+// Package edge is binboat's public front door: a :443 listener that only
 // accepts Cloudflare, TLS with Cloudflare Origin CA certificates and
 // Authenticated Origin Pulls, and a Host-header router that proxies to
 // apps on 127.0.0.1 (docs/architecture.md).

@@ -1,4 +1,4 @@
--- Backups of app databases (app = '_dootd' for dootd.db itself).
+-- Backups of app databases (app = '_binboat' for binboat.db itself).
 CREATE TABLE backups (
     id          INTEGER PRIMARY KEY,
     app         TEXT    NOT NULL,

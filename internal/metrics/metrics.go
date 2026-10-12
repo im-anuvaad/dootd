@@ -1,4 +1,4 @@
-// Package metrics samples host, dootd and per-app resource usage and
+// Package metrics samples host, binboat and per-app resource usage and
 // request statistics every 10 seconds, keeps the last hour in memory and
 // stores 1-minute rollups for 7 days (docs/architecture.md).
 package metrics
@@ -16,16 +16,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/edge"
-	"github.com/sumitwaani2/dootd/internal/hostinfo"
-	"github.com/sumitwaani2/dootd/internal/store"
-	"github.com/sumitwaani2/dootd/internal/supervisor"
+	"github.com/sumitwaani2/binboat/internal/edge"
+	"github.com/sumitwaani2/binboat/internal/hostinfo"
+	"github.com/sumitwaani2/binboat/internal/store"
+	"github.com/sumitwaani2/binboat/internal/supervisor"
 )
 
 // Scopes other than app names.
 const (
-	Host  = "_host"
-	Dootd = "_dootd"
+	Host    = "_host"
+	Binboat = "_binboat"
 )
 
 // Timings.
@@ -42,7 +42,7 @@ const (
 // NaN when there were no requests.
 type Point struct {
 	TS        time.Time `json:"ts"`
-	CPU       float64   `json:"cpu"`       // percent (host: of all cores; apps, dootd: of one core)
+	CPU       float64   `json:"cpu"`       // percent (host: of all cores; apps, binboat: of one core)
 	Mem       int64     `json:"mem"`       // bytes
 	MemLimit  int64     `json:"mem_limit"` // host: total RAM; apps: memory.max
 	Swap      int64     `json:"swap"`
@@ -71,7 +71,7 @@ type Collector struct {
 	rings map[string][]Point // newest last, at most ringSize
 	prev  map[string]counters
 	host  cpuTimes
-	self  int64 // dootd CPU ticks
+	self  int64 // binboat CPU ticks
 	last  time.Time
 	cur   map[string][]rawSample // samples of the current minute
 	curM  time.Time
@@ -150,7 +150,7 @@ func (c *Collector) sample(now time.Time) {
 		hp.CPU = clamp(100*(dt-di)/dt, 0, 100)
 	}
 	c.host = ht
-	// dootd itself.
+	// binboat itself.
 	rss, ticks := readSelf()
 	sp := Point{TS: now, Mem: rss, Pids: int64(threads()), P50: math.NaN(), P95: math.NaN()}
 	if c.self > 0 && ticks >= c.self {
@@ -159,7 +159,7 @@ func (c *Collector) sample(now time.Time) {
 	c.self = ticks
 	c.mu.Unlock()
 	samples[Host] = rawSample{p: hp, secs: secs}
-	samples[Dootd] = rawSample{p: sp, secs: secs}
+	samples[Binboat] = rawSample{p: sp, secs: secs}
 
 	// Apps.
 	for _, a := range c.Sup.Apps() {
@@ -254,7 +254,7 @@ func (c *Collector) write(ctx context.Context, minute time.Time, bySc map[string
 	defer tx.Rollback()
 	for scope, ss := range bySc {
 		p := rollup(ss)
-		// A minute can be written twice when dootd restarts inside it:
+		// A minute can be written twice when binboat restarts inside it:
 		// merge instead of replacing, so no requests are lost.
 		if _, err := tx.ExecContext(ctx, `INSERT INTO metrics_1m (scope, ts, cpu, mem, mem_limit, swap, load1, disk_used,
 			disk_total, pids, io_read, io_write, req, req_5xx, p50, p95, oom) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
@@ -328,18 +328,18 @@ func (c *Collector) Latest(scope string) (Point, bool) {
 	return r[len(r)-1], true
 }
 
-// Scopes lists scopes with samples (host, dootd, then apps sorted).
+// Scopes lists scopes with samples (host, binboat, then apps sorted).
 func (c *Collector) Scopes() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	var apps []string
 	for s := range c.rings {
-		if s != Host && s != Dootd {
+		if s != Host && s != Binboat {
 			apps = append(apps, s)
 		}
 	}
 	sort.Strings(apps)
-	return append([]string{Host, Dootd}, apps...)
+	return append([]string{Host, Binboat}, apps...)
 }
 
 // Range is a chart time range.
@@ -576,10 +576,10 @@ func readCPUTimes() cpuTimes {
 	return t
 }
 
-// clockTicks is USER_HZ, 100 on every Linux platform dootd supports.
+// clockTicks is USER_HZ, 100 on every Linux platform binboat supports.
 const clockTicks = 100
 
-// readSelf returns dootd's resident memory and CPU ticks (user+system).
+// readSelf returns binboat's resident memory and CPU ticks (user+system).
 func readSelf() (rss int64, ticks int64) {
 	if b, err := os.ReadFile("/proc/self/status"); err == nil {
 		for _, l := range strings.Split(string(b), "\n") {

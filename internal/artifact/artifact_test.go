@@ -87,7 +87,7 @@ func unpack(t testing.TB, es []tarEntry) (string, error) {
 }
 
 func TestUnpack(t *testing.T) {
-	dst, err := unpack(t, parseEntries("d bin\nf bin/app\nf dootd.toml\nl static/link ../bin/app\nf templates/x.html"))
+	dst, err := unpack(t, parseEntries("d bin\nf bin/app\nf binboat.toml\nl static/link ../bin/app\nf templates/x.html"))
 	if err != nil {
 		t.Fatal(err)
 	}

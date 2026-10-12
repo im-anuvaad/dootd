@@ -122,7 +122,7 @@ func (rt *Router) newProxy(r Route) *appProxy {
 				return // client went away
 			}
 			rt.Log.Warn("proxy error", "app", r.App, "err", err)
-			page(w, http.StatusBadGateway, "App unreachable", "The app did not answer. It may have just crashed; dootd restarts it automatically.", 5)
+			page(w, http.StatusBadGateway, "App unreachable", "The app did not answer. It may have just crashed; binboat restarts it automatically.", 5)
 		},
 	}
 	return &appProxy{route: r, proxy: p, stats: &Stats{}}
@@ -199,14 +199,14 @@ func page(w http.ResponseWriter, code int, title, msg string, retryAfter int) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	h.Set("Cache-Control", "no-store")
-	h.Set("X-Dootd-Page", strconv.Itoa(code))
+	h.Set("X-Binboat-Page", strconv.Itoa(code))
 	if retryAfter > 0 {
 		h.Set("Retry-After", strconv.Itoa(retryAfter))
 	}
 	w.WriteHeader(code)
 	fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">`+
 		`<title>%[1]d %[2]s</title><style>body{font:16px system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem;color:#333}`+
-		`h1{font-size:1.4rem}</style><h1>%[2]s</h1><p>%[3]s</p><p><small>%[1]d · dootd</small></p>`+"\n",
+		`h1{font-size:1.4rem}</style><h1>%[2]s</h1><p>%[3]s</p><p><small>%[1]d · binboat</small></p>`+"\n",
 		code, html.EscapeString(title), html.EscapeString(msg))
 }
 

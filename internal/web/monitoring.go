@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/hostinfo"
-	"github.com/sumitwaani2/dootd/internal/metrics"
+	"github.com/sumitwaani2/binboat/internal/hostinfo"
+	"github.com/sumitwaani2/binboat/internal/metrics"
 )
 
 // Thresholds for dashboard warnings.
@@ -78,7 +78,7 @@ var hostCharts = map[string]chartSpec{
 	}},
 }
 
-var dootdCharts = map[string]chartSpec{
+var binboatCharts = map[string]chartSpec{
 	"cpu": {fmtPct, 10, func(p []metrics.Point, _ float64) []Line {
 		return []Line{{Name: "CPU (of one core)", Color: blue, Values: col(p, func(p metrics.Point) float64 { return p.CPU })}}
 	}},
@@ -127,8 +127,8 @@ func (s *Server) chartSVG(w http.ResponseWriter, r *http.Request) {
 	case metrics.Host:
 		specs = hostCharts
 		extra = float64(s.hostCPUs())
-	case metrics.Dootd:
-		specs = dootdCharts
+	case metrics.Binboat:
+		specs = binboatCharts
 	default:
 		a := s.Sup.Get(scope)
 		if a == nil {
@@ -178,7 +178,7 @@ func chartRefs(scope string, rng metrics.Range, titles [][2]string) []ChartRef {
 	return out
 }
 
-// metricsPage shows the host and dootd itself.
+// metricsPage shows the host and binboat itself.
 func (s *Server) metricsPage(w http.ResponseWriter, r *http.Request) {
 	rng := metrics.ParseRange(r.URL.Query().Get("range"))
 	data := map[string]any{
@@ -187,9 +187,9 @@ func (s *Server) metricsPage(w http.ResponseWriter, r *http.Request) {
 		"Host": chartRefs(metrics.Host, rng, [][2]string{
 			{"cpu", "CPU (all cores)"}, {"memory", "Memory"}, {"load", "Load average"}, {"disk", "Disk (" + s.Layout.Root + ")"},
 		}),
-		"Dootd": chartRefs(metrics.Dootd, rng, [][2]string{{"cpu", "dootd CPU"}, {"memory", "dootd memory"}}),
+		"Binboat": chartRefs(metrics.Binboat, rng, [][2]string{{"cpu", "binboat CPU"}, {"memory", "binboat memory"}}),
 	}
-	if p, ok := s.Metrics.Latest(metrics.Dootd); ok {
+	if p, ok := s.Metrics.Latest(metrics.Binboat); ok {
 		data["Self"] = p
 	}
 	if p, ok := s.Metrics.Latest(metrics.Host); ok {

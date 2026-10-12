@@ -1,5 +1,5 @@
 // Package buildinfo exposes version metadata injected at build time via
-// -ldflags "-X github.com/sumitwaani2/dootd/internal/buildinfo.Version=...".
+// -ldflags "-X github.com/sumitwaani2/binboat/internal/buildinfo.Version=...".
 package buildinfo
 
 import (
@@ -16,6 +16,6 @@ var (
 
 // String returns a single human-readable version line.
 func String() string {
-	return fmt.Sprintf("dootd %s (commit %s, built %s, %s %s/%s)",
+	return fmt.Sprintf("binboat %s (commit %s, built %s, %s %s/%s)",
 		Version, Commit, Date, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }

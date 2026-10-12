@@ -14,12 +14,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/buildinfo"
-	"github.com/sumitwaani2/dootd/internal/layout"
-	"github.com/sumitwaani2/dootd/internal/logs"
-	"github.com/sumitwaani2/dootd/internal/s3"
-	"github.com/sumitwaani2/dootd/internal/secrets"
-	"github.com/sumitwaani2/dootd/internal/store"
+	"github.com/sumitwaani2/binboat/internal/buildinfo"
+	"github.com/sumitwaani2/binboat/internal/layout"
+	"github.com/sumitwaani2/binboat/internal/logs"
+	"github.com/sumitwaani2/binboat/internal/s3"
+	"github.com/sumitwaani2/binboat/internal/secrets"
+	"github.com/sumitwaani2/binboat/internal/store"
 )
 
 // Kinds.
@@ -126,7 +126,7 @@ func (s *Service) Init(ctx context.Context) error {
 	for _, e := range entries {
 		os.RemoveAll(filepath.Join(s.stagingDir(), e.Name()))
 	}
-	_, err := s.Store.Writer().ExecContext(ctx, `UPDATE backups SET status = ?, error = 'interrupted: dootd restarted', finished_at = ?
+	_, err := s.Store.Writer().ExecContext(ctx, `UPDATE backups SET status = ?, error = 'interrupted: binboat restarted', finished_at = ?
 		WHERE status = ?`, StatusFailed, time.Now().Unix(), StatusRunning)
 	return err
 }
@@ -370,7 +370,7 @@ func (s *Service) run(ctx context.Context, app, kind string, wait bool, lg *logs
 		return fail(err)
 	}
 	defer os.RemoveAll(work)
-	m := &Manifest{Version: ManifestVersion, App: app, Kind: kind, CreatedAt: start.UTC(), Release: release, DootdVersion: buildinfo.Version}
+	m := &Manifest{Version: ManifestVersion, App: app, Kind: kind, CreatedAt: start.UTC(), Release: release, BinboatVersion: buildinfo.Version}
 	for _, rel := range dbs {
 		dst := filepath.Join(work, "files", rel)
 		if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {

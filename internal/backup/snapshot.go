@@ -86,7 +86,7 @@ func dsn(path string, extra ...string) string {
 // Snapshot writes a consistent copy of the live database src to dst with
 // VACUUM INTO (safe while the app writes; works in WAL mode) and checks
 // the copy with quick_check. Companion -wal/-shm files that SQLite may
-// create while dootd (root) has the database open are given back to the
+// create while binboat (root) has the database open are given back to the
 // database's owner, so the app can still open it.
 func Snapshot(ctx context.Context, src, dst string) error {
 	st, err := os.Stat(src)

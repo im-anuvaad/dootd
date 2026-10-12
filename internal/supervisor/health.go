@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/app"
+	"github.com/sumitwaani2/binboat/internal/app"
 )
 
 // healthCheck waits until the app accepts TCP connections on its port and
@@ -74,7 +74,7 @@ func probe(ctx context.Context, c *http.Client, addr, url, host string) error {
 	if host != "" {
 		req.Host = host
 	}
-	req.Header.Set("User-Agent", "dootd-health")
+	req.Header.Set("User-Agent", "binboat-health")
 	resp, err := c.Do(req)
 	if err != nil {
 		return fmt.Errorf("GET %s: %w", url, err)

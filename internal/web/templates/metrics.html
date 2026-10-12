@@ -24,9 +24,9 @@
 </section>
 
 <section class="card">
-  <h2>dootd itself</h2>
+  <h2>binboat itself</h2>
   {{with .Data.Self}}<p class="muted">Now: {{bytes .Mem}} resident (target under 30 MB) · CPU {{printf "%.1f" .CPU}}% of a core · {{.Pids}} threads</p>{{end}}
-  <div class="charts" data-refresh="10" id="dootd-charts">{{range .Data.Dootd}}<figure><figcaption>{{.Title}}</figcaption><img src="{{.URL}}" alt="{{.Title}} chart" width="640" height="180"></figure>{{end}}</div>
+  <div class="charts" data-refresh="10" id="binboat-charts">{{range .Data.Binboat}}<figure><figcaption>{{.Title}}</figcaption><img src="{{.URL}}" alt="{{.Title}} chart" width="640" height="180"></figure>{{end}}</div>
   <p class="muted">Samples every 10 s; the last hour is kept in memory, 1-minute averages for 7 days.</p>
 </section>
 {{end}}

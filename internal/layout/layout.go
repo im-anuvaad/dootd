@@ -8,14 +8,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sumitwaani2/dootd/internal/users"
+	"github.com/sumitwaani2/binboat/internal/users"
 )
 
-// Fixed locations. dootd has no config file (docs/architecture.md).
+// Fixed locations. binboat has no config file (docs/architecture.md).
 const (
-	DataRoot  = "/var/lib/dootd"
-	ConfigDir = "/etc/dootd"
-	MasterKey = "/etc/dootd/master.key"
+	DataRoot  = "/var/lib/binboat"
+	ConfigDir = "/etc/binboat"
+	MasterKey = "/etc/binboat/master.key"
 )
 
 // Layout resolves paths under the data root (DataRoot).
@@ -26,13 +26,13 @@ type Layout struct {
 // Default is the layout under DataRoot.
 func Default() Layout { return Layout{Root: DataRoot} }
 
-// DBPath is dootd.db.
-func (l Layout) DBPath() string { return filepath.Join(l.Root, "dootd.db") }
+// DBPath is binboat.db.
+func (l Layout) DBPath() string { return filepath.Join(l.Root, "binboat.db") }
 
 // SetupDir holds the self-signed certificate of the setup address.
 func (l Layout) SetupDir() string { return filepath.Join(l.Root, "setup") }
 
-// EnsureBase creates /etc/dootd (0700) and the data root (0711: app users
+// EnsureBase creates /etc/binboat (0700) and the data root (0711: app users
 // can traverse to their own directories without listing anything).
 func EnsureBase(l Layout) error {
 	if err := os.MkdirAll(ConfigDir, 0o700); err != nil {

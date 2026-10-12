@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
-# dootd installer: the only command you ever run over SSH.
+# binboat installer: the only command you ever run over SSH.
 #
-#   curl -fsSL https://github.com/sumitwaani2/dootd/releases/latest/download/install.sh | sudo bash
+#   curl -fsSL https://github.com/sumitwaani2/binboat/releases/latest/download/install.sh | sudo bash
 #
 # It asks nothing and installs no system packages; nothing is ever built on
 # the server (docs/architecture.md §4, §7):
 #   1. checks the host (Ubuntu 24.04+, systemd, cgroup v2, x86_64/aarch64)
-#   2. downloads dootd-linux-<arch>, verifies it against checksums.txt
+#   2. downloads binboat-linux-<arch>, verifies it against checksums.txt
 #      (nothing is changed on a mismatch)
-#   3. stops dootd if it runs, installs the binary, and runs `dootd setup-host`:
+#   3. stops binboat if it runs, installs the binary, and runs `binboat setup-host`:
 #      directories, master key, systemd unit, a new one-time password, start,
 #      and prints the address to open
 #
-# Running it again updates dootd to the latest release (keeping every app
+# Running it again updates binboat to the latest release (keeping every app
 # and setting) and prints a new one-time password (lost password, broken
 # dashboard domain).
 #
-#   DOOTD_VERSION=v1.0.0   install that release instead of the latest
+#   BINBOAT_VERSION=v1.0.0   install that release instead of the latest
 set -euo pipefail
 
-REPO="sumitwaani2/dootd"
-INSTALL_PATH="/usr/local/bin/dootd"
+REPO="sumitwaani2/binboat"
+INSTALL_PATH="/usr/local/bin/binboat"
 MIN_UBUNTU="24.04"
 
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -32,13 +32,13 @@ version_ge() { [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n1)" = "$2" ];
 
 check_host() {
   [ "$(id -u)" -eq 0 ] || fail "run as root (pipe to 'sudo bash')"
-  [ "$(uname -s)" = "Linux" ] || fail "dootd only supports Linux"
+  [ "$(uname -s)" = "Linux" ] || fail "binboat only supports Linux"
 
   [ -r /etc/os-release ] || fail "cannot read /etc/os-release"
   # shellcheck disable=SC1091
   . /etc/os-release
-  [ "${ID:-}" = "ubuntu" ] || fail "unsupported OS '${ID:-unknown}': dootd requires Ubuntu ${MIN_UBUNTU} or newer"
-  version_ge "${VERSION_ID:-0}" "$MIN_UBUNTU" || fail "Ubuntu ${VERSION_ID:-?} is too old: dootd requires ${MIN_UBUNTU} or newer"
+  [ "${ID:-}" = "ubuntu" ] || fail "unsupported OS '${ID:-unknown}': binboat requires Ubuntu ${MIN_UBUNTU} or newer"
+  version_ge "${VERSION_ID:-0}" "$MIN_UBUNTU" || fail "Ubuntu ${VERSION_ID:-?} is too old: binboat requires ${MIN_UBUNTU} or newer"
 
   [ -d /run/systemd/system ] || fail "systemd is not running (required)"
   [ -f /sys/fs/cgroup/cgroup.controllers ] || fail "cgroup v2 (unified hierarchy) is required"
@@ -54,8 +54,8 @@ check_host() {
 }
 
 download() {
-  if [ -n "${DOOTD_VERSION:-}" ]; then
-    BASE="https://github.com/${REPO}/releases/download/${DOOTD_VERSION}"
+  if [ -n "${BINBOAT_VERSION:-}" ]; then
+    BASE="https://github.com/${REPO}/releases/download/${BINBOAT_VERSION}"
   else
     BASE="https://github.com/${REPO}/releases/latest/download"
   fi
@@ -63,8 +63,8 @@ download() {
   TMP="$(mktemp -d)"
   trap 'rm -rf "$TMP"' EXIT
 
-  local bin="dootd-linux-${ARCH}"
-  say "Downloading ${bin} (${DOOTD_VERSION:-latest})"
+  local bin="binboat-linux-${ARCH}"
+  say "Downloading ${bin} (${BINBOAT_VERSION:-latest})"
   curl -fsSL --retry 3 -o "${TMP}/${bin}" "${BASE}/${bin}" || fail "download failed: ${BASE}/${bin}"
   curl -fsSL --retry 3 -o "${TMP}/checksums.txt" "${BASE}/checksums.txt" || fail "download failed: ${BASE}/checksums.txt"
 
@@ -84,9 +84,9 @@ download() {
 }
 
 install_binary() {
-  if systemctl is-active --quiet dootd 2>/dev/null; then
-    say "Stopping dootd (apps restart with it; a few seconds of downtime)"
-    systemctl stop dootd
+  if systemctl is-active --quiet binboat 2>/dev/null; then
+    say "Stopping binboat (apps restart with it; a few seconds of downtime)"
+    systemctl stop binboat
   fi
   mv -f "${INSTALL_PATH}.new" "$INSTALL_PATH"
   say "Installed: ${NEW_VERSION}"

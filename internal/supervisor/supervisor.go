@@ -13,11 +13,11 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/sumitwaani2/dootd/internal/app"
-	"github.com/sumitwaani2/dootd/internal/cgroup"
-	"github.com/sumitwaani2/dootd/internal/layout"
-	"github.com/sumitwaani2/dootd/internal/logs"
-	"github.com/sumitwaani2/dootd/internal/users"
+	"github.com/sumitwaani2/binboat/internal/app"
+	"github.com/sumitwaani2/binboat/internal/cgroup"
+	"github.com/sumitwaani2/binboat/internal/layout"
+	"github.com/sumitwaani2/binboat/internal/logs"
+	"github.com/sumitwaani2/binboat/internal/users"
 )
 
 // Deps are the supervisor's collaborators.

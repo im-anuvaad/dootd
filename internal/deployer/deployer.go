@@ -1,7 +1,7 @@
 // Package deployer implements the deploy pipeline (docs/architecture.md
-// §7): GitHub release → download + checksum → safe unpack → dootd.toml and
+// §7): GitHub release → download + checksum → safe unpack → binboat.toml and
 // ELF check → stop old → pre-deploy backup → switch → start + health check,
-// with automatic rollback when the new release is unhealthy. dootd never
+// with automatic rollback when the new release is unhealthy. binboat never
 // builds anything.
 //
 // All deploys and rollbacks on the host run one at a time from a single
@@ -23,16 +23,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/app"
-	"github.com/sumitwaani2/dootd/internal/artifact"
-	"github.com/sumitwaani2/dootd/internal/github"
-	"github.com/sumitwaani2/dootd/internal/layout"
-	"github.com/sumitwaani2/dootd/internal/logs"
-	"github.com/sumitwaani2/dootd/internal/manifest"
-	"github.com/sumitwaani2/dootd/internal/secrets"
-	"github.com/sumitwaani2/dootd/internal/store"
-	"github.com/sumitwaani2/dootd/internal/supervisor"
-	"github.com/sumitwaani2/dootd/internal/users"
+	"github.com/sumitwaani2/binboat/internal/app"
+	"github.com/sumitwaani2/binboat/internal/artifact"
+	"github.com/sumitwaani2/binboat/internal/github"
+	"github.com/sumitwaani2/binboat/internal/layout"
+	"github.com/sumitwaani2/binboat/internal/logs"
+	"github.com/sumitwaani2/binboat/internal/manifest"
+	"github.com/sumitwaani2/binboat/internal/secrets"
+	"github.com/sumitwaani2/binboat/internal/store"
+	"github.com/sumitwaani2/binboat/internal/supervisor"
+	"github.com/sumitwaani2/binboat/internal/users"
 )
 
 // Retention.
@@ -65,7 +65,7 @@ type AppConfig struct {
 var tagRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 // ValidateTag checks that a release tag can be used as a release directory
-// name and as DOOTD_RELEASE.
+// name and as BINBOAT_RELEASE.
 func ValidateTag(tag string) error {
 	if !tagRe.MatchString(tag) || strings.Contains(tag, "..") {
 		return fmt.Errorf("release tag %q is not supported: use letters, digits, '.', '_' and '-' (e.g. v1.4.0)", tag)
@@ -302,7 +302,7 @@ func (d *Deployer) Run(ctx context.Context) {
 				for {
 					select {
 					case j := <-d.queue:
-						d.finish(j.id, errors.New("cancelled: dootd is shutting down"))
+						d.finish(j.id, errors.New("cancelled: binboat is shutting down"))
 					default:
 						return
 					}
@@ -483,7 +483,7 @@ func (d *Deployer) deploy(ctx context.Context, cfg AppConfig, j job, lg *logs.Lo
 	if err := artifact.CheckBinary(dir, m.Run[0], runtime.GOARCH); err != nil {
 		return err
 	}
-	lg.Writef("dootd.toml: run %q, health %s", strings.Join(m.Run, " "), m.HealthPath)
+	lg.Writef("binboat.toml: run %q, health %s", strings.Join(m.Run, " "), m.HealthPath)
 
 	// 4. Keep it as an immutable release (root-owned, read-only to the app).
 	relDir := d.Layout.ReleaseDir(name, tag)

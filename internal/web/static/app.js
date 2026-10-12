@@ -1,4 +1,4 @@
-// dootd dashboard: live log streams, status refresh and confirmations.
+// binboat dashboard: live log streams, status refresh and confirmations.
 // Everything also works without JavaScript except the live parts.
 "use strict";
 

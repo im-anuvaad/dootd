@@ -79,7 +79,7 @@ func serial() *big.Int {
 	return n
 }
 
-// AOP is dootd's private CA for Authenticated Origin Pulls and the client
+// AOP is binboat's private CA for Authenticated Origin Pulls and the client
 // certificate (signed by it) that Cloudflare presents to the origin.
 type AOP struct {
 	Dir       string
@@ -160,7 +160,7 @@ func createCA(dir string) (*x509.Certificate, crypto.Signer, error) {
 	}
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial(),
-		Subject:               pkix.Name{CommonName: "dootd Authenticated Origin Pulls CA", Organization: []string{"dootd"}},
+		Subject:               pkix.Name{CommonName: "binboat Authenticated Origin Pulls CA", Organization: []string{"binboat"}},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(aopCAValidity),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
@@ -193,7 +193,7 @@ func createClient(dir string, ca *x509.Certificate, caKey crypto.Signer) error {
 	}
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial(),
-		Subject:               pkix.Name{CommonName: "dootd origin pull client", Organization: []string{"dootd"}},
+		Subject:               pkix.Name{CommonName: "binboat origin pull client", Organization: []string{"binboat"}},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(aopClientValidity),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,

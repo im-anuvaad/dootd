@@ -28,7 +28,7 @@ CREATE TABLE deployments (
 ) STRICT;
 CREATE INDEX deployments_app ON deployments (app, id);
 
--- Whether the operator wants an app running (survives dootd restarts).
+-- Whether the operator wants an app running (survives binboat restarts).
 CREATE TABLE app_state (
     app           TEXT PRIMARY KEY,
     desired_state TEXT NOT NULL             -- running | stopped

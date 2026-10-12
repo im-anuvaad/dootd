@@ -22,7 +22,7 @@ jobs:
       - name: Build release binaries
         run: make build-all VERSION=${GITHUB_REF_NAME}
       - name: Smoke test
-        run: ./dist/dootd-linux-amd64 version | grep -F "dootd ${GITHUB_REF_NAME} "
+        run: ./dist/binboat-linux-amd64 version | grep -F "binboat ${GITHUB_REF_NAME} "
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -34,7 +34,7 @@ jobs:
             --title "${GITHUB_REF_NAME}" \
             --generate-notes \
             ${prerelease} \
-            dist/dootd-linux-amd64 \
-            dist/dootd-linux-arm64 \
+            dist/binboat-linux-amd64 \
+            dist/binboat-linux-arm64 \
             dist/checksums.txt \
             install.sh

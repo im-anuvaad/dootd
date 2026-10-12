@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/logs"
+	"github.com/sumitwaani2/binboat/internal/logs"
 )
 
 // KeepPreRestore is how many .pre-restore-* folders are kept per app.
@@ -231,7 +231,7 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	defer in.Close()
-	tmp := dst + ".dootd-restore"
+	tmp := dst + ".binboat-restore"
 	out, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err

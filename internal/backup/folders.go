@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sumitwaani2/dootd/internal/s3"
+	"github.com/sumitwaani2/binboat/internal/s3"
 )
 
 // Folders lists the backup folders in the bucket (one per app name), for
@@ -83,7 +83,7 @@ func (s *Service) RestoreFolder(ctx context.Context, app, folder string) ([]stri
 }
 
 // Newest returns the newest backup object by the time in its name, skipping
-// anything that is not a dootd archive.
+// anything that is not a binboat archive.
 func Newest(objs []s3.Object) (s3.Object, bool) {
 	var ok []s3.Object
 	for _, o := range objs {

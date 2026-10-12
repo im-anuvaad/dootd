@@ -36,8 +36,8 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
         run: |
-          CGO_ENABLED=0 go build -trimpath -o dist/dootd-linux-${GOARCH} ./cmd/dootd
-          file dist/dootd-linux-${GOARCH}
+          CGO_ENABLED=0 go build -trimpath -o dist/binboat-linux-${GOARCH} ./cmd/binboat
+          file dist/binboat-linux-${GOARCH}
       - name: Smoke test (amd64)
         if: matrix.goarch == 'amd64'
-        run: ./dist/dootd-linux-amd64 version
+        run: ./dist/binboat-linux-amd64 version

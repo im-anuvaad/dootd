@@ -13,27 +13,27 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/apps"
-	"github.com/sumitwaani2/dootd/internal/auth"
-	"github.com/sumitwaani2/dootd/internal/backup"
-	"github.com/sumitwaani2/dootd/internal/buildinfo"
-	"github.com/sumitwaani2/dootd/internal/cgroup"
-	"github.com/sumitwaani2/dootd/internal/deployer"
-	"github.com/sumitwaani2/dootd/internal/edge"
-	"github.com/sumitwaani2/dootd/internal/layout"
-	"github.com/sumitwaani2/dootd/internal/logs"
-	"github.com/sumitwaani2/dootd/internal/metrics"
-	"github.com/sumitwaani2/dootd/internal/secrets"
-	"github.com/sumitwaani2/dootd/internal/store"
-	"github.com/sumitwaani2/dootd/internal/supervisor"
-	"github.com/sumitwaani2/dootd/internal/users"
-	"github.com/sumitwaani2/dootd/internal/web"
+	"github.com/sumitwaani2/binboat/internal/apps"
+	"github.com/sumitwaani2/binboat/internal/auth"
+	"github.com/sumitwaani2/binboat/internal/backup"
+	"github.com/sumitwaani2/binboat/internal/buildinfo"
+	"github.com/sumitwaani2/binboat/internal/cgroup"
+	"github.com/sumitwaani2/binboat/internal/deployer"
+	"github.com/sumitwaani2/binboat/internal/edge"
+	"github.com/sumitwaani2/binboat/internal/layout"
+	"github.com/sumitwaani2/binboat/internal/logs"
+	"github.com/sumitwaani2/binboat/internal/metrics"
+	"github.com/sumitwaani2/binboat/internal/secrets"
+	"github.com/sumitwaani2/binboat/internal/store"
+	"github.com/sumitwaani2/binboat/internal/supervisor"
+	"github.com/sumitwaani2/binboat/internal/users"
+	"github.com/sumitwaani2/binboat/internal/web"
 )
 
 func runServe(stderr io.Writer) int {
 	log := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	if err := serve(log); err != nil {
-		log.Error("dootd stopped with an error", "err", err)
+		log.Error("binboat stopped with an error", "err", err)
 		return 1
 	}
 	return 0
@@ -41,7 +41,7 @@ func runServe(stderr io.Writer) int {
 
 func serve(log *slog.Logger) error {
 	if os.Geteuid() != 0 {
-		return errors.New("dootd serve must run as root (it manages users and cgroups)")
+		return errors.New("binboat serve must run as root (it manages users and cgroups)")
 	}
 	log.Info("starting", "version", buildinfo.String())
 	tuneMemory()
@@ -266,7 +266,7 @@ func newEdge(ctx context.Context, log *slog.Logger, lay layout.Layout, st *store
 	return m, nil
 }
 
-// logStatus prints every app's state (send SIGUSR1 to dootd).
+// logStatus prints every app's state (send SIGUSR1 to binboat).
 func logStatus(log *slog.Logger, sup *supervisor.Supervisor) {
 	for _, a := range sup.Apps() {
 		s := a.Status()
@@ -294,7 +294,7 @@ func keys(m map[string]bool) []string {
 	return out
 }
 
-// tuneMemory keeps dootd inside its 30 MB resident budget: a
+// tuneMemory keeps binboat inside its 30 MB resident budget: a
 // soft heap limit makes the GC run more often before the heap grows, and
 // freed memory is handed back to the kernel every 2 minutes instead of
 // being kept for reuse. GOMEMLIMIT / GOGC in the environment override.

@@ -1,7 +1,7 @@
-// Package store owns dootd's state database (SQLite, WAL mode).
+// Package store owns binboat's state database (SQLite, WAL mode).
 //
 // All writes go through a single-connection writer pool so SQLite never sees
-// competing writers from dootd itself. Reads use a separate read-only pool.
+// competing writers from binboat itself. Reads use a separate read-only pool.
 package store
 
 import (
@@ -17,7 +17,7 @@ import (
 	_ "modernc.org/sqlite" // registers the "sqlite" driver (pure Go, no CGO)
 )
 
-// Store is the handle to dootd.db.
+// Store is the handle to binboat.db.
 type Store struct {
 	writer *sql.DB
 	reader *sql.DB

@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/store"
+	"github.com/sumitwaani2/binboat/internal/store"
 )
 
 // Session lifetimes.

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sumitwaani2/dootd/internal/app"
+	"github.com/sumitwaani2/binboat/internal/app"
 )
 
 func freePort(t *testing.T) (net.Listener, int) {

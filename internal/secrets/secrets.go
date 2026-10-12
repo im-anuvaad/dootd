@@ -1,4 +1,4 @@
-// Package secrets manages dootd's master key and encrypts values at rest
+// Package secrets manages binboat's master key and encrypts values at rest
 // with AES-256-GCM.
 //
 // Key file: 64 lowercase hex characters (32 bytes) followed by a newline,

@@ -11,22 +11,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sumitwaani2/dootd/contrib/systemd"
-	"github.com/sumitwaani2/dootd/internal/auth"
-	"github.com/sumitwaani2/dootd/internal/buildinfo"
-	"github.com/sumitwaani2/dootd/internal/edge"
-	"github.com/sumitwaani2/dootd/internal/layout"
-	"github.com/sumitwaani2/dootd/internal/secrets"
-	"github.com/sumitwaani2/dootd/internal/store"
+	"github.com/sumitwaani2/binboat/contrib/systemd"
+	"github.com/sumitwaani2/binboat/internal/auth"
+	"github.com/sumitwaani2/binboat/internal/buildinfo"
+	"github.com/sumitwaani2/binboat/internal/edge"
+	"github.com/sumitwaani2/binboat/internal/layout"
+	"github.com/sumitwaani2/binboat/internal/secrets"
+	"github.com/sumitwaani2/binboat/internal/store"
 )
 
 // runSetupHost is the second half of install.sh (docs/architecture.md):
 // directories, master key, systemd unit, a new one-time password, start
-// dootd, print how to sign in. install.sh stops dootd before it replaces
+// binboat, print how to sign in. install.sh stops binboat before it replaces
 // the binary; running this again is safe.
 func runSetupHost(stdout, stderr io.Writer) int {
 	if err := setupHost(stdout); err != nil {
-		fmt.Fprintln(stderr, "dootd setup-host:", err)
+		fmt.Fprintln(stderr, "binboat setup-host:", err)
 		return 1
 	}
 	return 0
@@ -37,7 +37,7 @@ func setupHost(out io.Writer) error {
 		return errors.New("must run as root")
 	}
 	if serviceActive() {
-		return errors.New("dootd is running; stop it first (systemctl stop dootd)")
+		return errors.New("binboat is running; stop it first (systemctl stop binboat)")
 	}
 	lay := layout.Default()
 	if err := layout.EnsureBase(lay); err != nil {
@@ -58,11 +58,11 @@ func setupHost(out io.Writer) error {
 	if err := systemctl("daemon-reload"); err != nil {
 		return err
 	}
-	if err := systemctl("enable", "--quiet", "dootd"); err != nil {
+	if err := systemctl("enable", "--quiet", "binboat"); err != nil {
 		return err
 	}
 
-	// The one-time password is written while dootd is stopped (it caches
+	// The one-time password is written while binboat is stopped (it caches
 	// the state in memory).
 	ctx := context.Background()
 	st, err := store.Open(ctx, lay.DBPath())
@@ -82,7 +82,7 @@ func setupHost(out io.Writer) error {
 		return err
 	}
 
-	if err := systemctl("start", "dootd"); err != nil {
+	if err := systemctl("start", "binboat"); err != nil {
 		return err
 	}
 	ready := waitListening("127.0.0.1:443", 30*time.Second)
@@ -94,9 +94,9 @@ func setupHost(out io.Writer) error {
 		ip = "<this server's IP address>"
 	}
 
-	fmt.Fprintf(out, "\ndootd %s is running.\n\n", buildinfo.Version)
+	fmt.Fprintf(out, "\nbinboat %s is running.\n\n", buildinfo.Version)
 	if !ready {
-		fmt.Fprintln(out, "  Warning: dootd is not answering on port 443 yet; see: journalctl -u dootd")
+		fmt.Fprintln(out, "  Warning: binboat is not answering on port 443 yet; see: journalctl -u binboat")
 		fmt.Fprintln(out)
 	}
 	fmt.Fprintf(out, "  Open:              https://%s\n", ip)
@@ -132,5 +132,5 @@ func systemctl(args ...string) error {
 }
 
 func serviceActive() bool {
-	return exec.Command("systemctl", "is-active", "--quiet", "dootd").Run() == nil
+	return exec.Command("systemctl", "is-active", "--quiet", "binboat").Run() == nil
 }
