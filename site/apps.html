@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hosting an app · binboat</title>
+<meta name="description" content="The binboat app contract: what a Go, Zig or C app needs to be deployed with one click.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">binboat</a>
+  <nav><a href="index.html">Overview</a><a href="install.html">Install</a><a href="apps.html" aria-current="page">Hosting an app</a><a href="api.html">Status API</a><a href="internals.html">How it works</a><a href="https://github.com/sumitwaani2/binboat" rel="noopener">GitHub</a></nav>
+</header>
+<main>
+<h1 id="binboat-app-contract">binboat App Contract</h1>
+<nav class="toc" aria-label="On this page"><b>On this page</b><ul><li><a href="#1-summary-checklist">1. Summary checklist</a></li><li><a href="#2-releases">2. Releases</a></li><li><a href="#3-environment-variables-binboat-provides">3. Environment variables binboat provides</a></li><li><a href="#4-http-rules">4. HTTP rules</a></li><li><a href="#5-filesystem-rules">5. Filesystem rules</a></li><li><a href="#6-sqlite-rules">6. SQLite rules</a></li><li><a href="#7-lifecycle">7. Lifecycle</a></li><li><a href="#8-resource-limits-defaults-editable-per-app">8. Resource limits (defaults, editable per app)</a></li><li><a href="#9-reading-the-contract-in-code">9. Reading the contract in code</a></li><li><a href="#10-minimal-repo-layout-example">10. Minimal repo layout example</a></li></ul></nav>
+<p>The rules a web app must follow to be hosted on binboat, and everything needed to build one. Any language works as long as it produces a static Linux binary; this document has recipes for <strong>Go</strong>, <strong>Zig</strong> and <strong>C</strong>. Follow them and the app deploys with one click.</p>
+<p>Contract version: <strong>3</strong> (the app's own GitHub Actions workflow builds it; binboat only deploys the result).</p>
+<h2 id="1-summary-checklist">1. Summary checklist</h2>
+<ul class="checklist">
+<li>The repo has a <code>binboat.toml</code> at the root with <code>contract = 3</code> and <code>run</code>. The repo name becomes the app name (e.g. <code>my_blog</code> → <code>my-blog</code>).</li>
+<li>The repo has the release workflow (<code>.github/workflows/release.yml</code>, §2.2). Pushing a <code>v*</code> tag tests, builds and publishes a GitHub release.</li>
+<li>The release tarball holds everything the app needs at runtime: the binary and any templates or static files.</li>
+<li>The app serves plain HTTP on <strong><code>127.0.0.1:$PORT</code></strong>. No TLS.</li>
+<li>All SQLite files live in <strong><code>$DATA_DIR</code></strong>, and nothing else is written anywhere except <code>$DATA_DIR</code> and <code>$TMPDIR</code>.</li>
+<li>The app knows that binboat backs up <strong>only its SQLite databases</strong>; backing up any other file it keeps is the app's own job (§5).</li>
+<li>The binary is <strong>static</strong> (Go: <code>CGO_ENABLED=0</code>; Zig/C: a <code>musl</code> target), so it doesn't depend on the server's libc.</li>
+<li><code>GET &lt;health_path&gt;</code> returns 2xx once the app is ready.</li>
+<li>On <strong>SIGTERM</strong>, the app finishes in-flight requests and exits within 10 s.</li>
+<li>Logs go to <strong>stdout/stderr</strong>, one line per entry, and stdout is line-buffered or flushed (§7). The app does not daemonize or fork into the background.</li>
+<li>Secrets come from environment variables, never from the repo.</li>
+</ul>
+<h2 id="2-releases">2. Releases</h2>
+<h3 id="21-binboattoml">2.1 <code>binboat.toml</code></h3>
+<p>It says how to <strong>run</strong> the app, and it travels inside every release tarball. Operational settings (domain, env vars, resource limits) are set in the dashboard.</p>
+<pre><code class="language-toml">contract    = 3
+run         = &quot;zig-out/bin/myapp&quot;   # required: binary + arguments, relative to the tarball root
+health_path = &quot;/healthz&quot;            # optional, default &quot;/&quot;
+</code></pre>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>contract</code></td>
+<td>yes</td>
+<td>—</td>
+<td><code>3</code>.</td>
+</tr>
+<tr>
+<td><code>run</code></td>
+<td>yes</td>
+<td>—</td>
+<td>Binary path plus arguments. It is <strong>not run through a shell</strong>, so pipes, <code>&amp;&amp;</code> and <code>$VAR</code> expansion don't work. The binary must be a Linux ELF executable for the server's CPU.</td>
+</tr>
+<tr>
+<td><code>health_path</code></td>
+<td>no</td>
+<td><code>/</code></td>
+<td>Must return 2xx or 3xx within 30 s of start.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Unknown keys are rejected, so typos fail the deploy instead of being ignored.</p>
+<h3 id="22-the-release-workflow">2.2 The release workflow</h3>
+<p>Save this as <code>.github/workflows/release.yml</code> in the app's repo and edit the <code>env:</code> block at its top:</p>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Meaning</th>
+<th>Zig</th>
+<th>C (compiled with <code>zig cc</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ZIG_VERSION</code></td>
+<td>The Zig release that builds the app (C too)</td>
+<td><code>0.16.0</code></td>
+<td><code>0.16.0</code></td>
+</tr>
+<tr>
+<td><code>TEST</code></td>
+<td>Your tests; they run first, and a failure publishes nothing</td>
+<td><code>zig build test</code></td>
+<td><code>make test CC="zig cc"</code></td>
+</tr>
+<tr>
+<td><code>CLEAN</code></td>
+<td>Removes the previous architecture's build output</td>
+<td><code>rm -rf zig-out</code></td>
+<td><code>rm -rf build</code></td>
+</tr>
+<tr>
+<td><code>BUILD</code></td>
+<td>Builds for <code>$TARGET</code> (<code>x86_64-linux-musl</code>, then <code>aarch64-linux-musl</code>)</td>
+<td><code>zig build -Doptimize=ReleaseSafe -Dtarget=$TARGET</code></td>
+<td><code>make CC="zig cc -target $TARGET"</code></td>
+</tr>
+<tr>
+<td><code>FILES</code></td>
+<td>What goes into the tarball next to <code>binboat.toml</code> (paths kept)</td>
+<td><code>zig-out/bin/myapp templates static</code></td>
+<td><code>build/myapp static</code></td>
+</tr>
+</tbody>
+</table></div>
+<pre><code class="language-yaml"># Tests, builds and publishes this app as a GitHub release that binboat can
+# deploy. Release with:  git tag v1.0.0 &amp;&amp; git push origin v1.0.0
+# A failing test, build or smoke test publishes nothing. Nothing is deployed
+# either: the release shows up in the app's Deploy menu in binboat.
+name: release
+
+on:
+  push:
+    tags: [&quot;v*&quot;]
+
+permissions:
+  contents: write # create the release
+
+env:
+  ZIG_VERSION: &quot;0.16.0&quot;
+  TEST: zig build test                                  # C: make test CC=&quot;zig cc&quot;
+  CLEAN: rm -rf zig-out                                 # C: rm -rf build
+  BUILD: zig build -Doptimize=ReleaseSafe -Dtarget=$TARGET   # C: make CC=&quot;zig cc -target $TARGET&quot;
+  FILES: zig-out/bin/myapp                              # C: build/myapp
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Zig
+        run: |
+          set -euo pipefail
+          if command -v zig &gt;/dev/null &amp;&amp; [ &quot;$(zig version)&quot; = &quot;$ZIG_VERSION&quot; ]; then exit 0; fi
+          dir=&quot;${RUNNER_TEMP}/zig-${ZIG_VERSION}&quot;
+          if [ ! -x &quot;$dir/zig&quot; ]; then
+            read -r url sum &lt; &lt;(curl -fsSL https://ziglang.org/download/index.json |
+              python3 -c &quot;import json,os,sys; e=json.load(sys.stdin)[os.environ['ZIG_VERSION']]['x86_64-linux']; print(e['tarball'], e['shasum'])&quot;)
+            curl -fsSL --retry 3 -o &quot;${RUNNER_TEMP}/zig.tar.xz&quot; &quot;$url&quot;
+            echo &quot;$sum  ${RUNNER_TEMP}/zig.tar.xz&quot; | sha256sum -c -
+            mkdir -p &quot;$dir&quot; &amp;&amp; tar -xJf &quot;${RUNNER_TEMP}/zig.tar.xz&quot; -C &quot;$dir&quot; --strip-components=1
+          fi
+          echo &quot;$dir&quot; &gt;&gt; &quot;$GITHUB_PATH&quot;
+
+      - name: Test
+        run: |
+          eval &quot;$CLEAN&quot;
+          eval &quot;$TEST&quot;
+
+      - name: Build and package
+        run: |
+          set -euo pipefail
+          rm -rf dist &amp;&amp; mkdir dist
+          for arch in amd64 arm64; do
+            case &quot;$arch&quot; in
+              amd64) export TARGET=x86_64-linux-musl ;;
+              arm64) export TARGET=aarch64-linux-musl ;;
+            esac
+            eval &quot;$CLEAN&quot;
+            eval &quot;$BUILD&quot;
+            pkg=&quot;$(mktemp -d)&quot; &amp;&amp; chmod 755 &quot;$pkg&quot;
+            cp binboat.toml &quot;$pkg/&quot;
+            for f in $FILES; do
+              mkdir -p &quot;$pkg/$(dirname &quot;$f&quot;)&quot;
+              cp -R &quot;$f&quot; &quot;$pkg/$f&quot;
+            done
+            tar -czf &quot;dist/app-linux-$arch.tar.gz&quot; -C &quot;$pkg&quot; .
+            rm -rf &quot;$pkg&quot;
+          done
+          (cd dist &amp;&amp; sha256sum app-linux-*.tar.gz &gt; checksums.txt)
+          cat dist/checksums.txt
+
+      - name: Smoke test (start the amd64 package as binboat would)
+        run: |
+          set -euo pipefail
+          python3 - &lt;&lt;'PY'
+          import os, shlex, signal, socket, subprocess, sys, tarfile, tempfile, time, tomllib, urllib.request
+          root = tempfile.mkdtemp()
+          with tarfile.open(&quot;dist/app-linux-amd64.tar.gz&quot;) as t:
+              t.extractall(root, filter=&quot;data&quot;)
+          m = tomllib.load(open(os.path.join(root, &quot;binboat.toml&quot;), &quot;rb&quot;))
+          assert m.get(&quot;contract&quot;) == 3, &quot;binboat.toml: contract must be 3&quot;
+          argv = shlex.split(m[&quot;run&quot;])
+          s = socket.socket(); s.bind((&quot;127.0.0.1&quot;, 0)); port = s.getsockname()[1]; s.close()
+          data, tmp = tempfile.mkdtemp(), tempfile.mkdtemp()
+          env = {&quot;PATH&quot;: &quot;/usr/bin:/bin&quot;, &quot;HOST&quot;: &quot;127.0.0.1&quot;, &quot;PORT&quot;: str(port), &quot;DATA_DIR&quot;: data, &quot;TMPDIR&quot;: tmp,
+                 &quot;BINBOAT_APP&quot;: &quot;smoke&quot;, &quot;BINBOAT_RELEASE&quot;: os.environ.get(&quot;GITHUB_REF_NAME&quot;, &quot;smoke&quot;), &quot;BINBOAT_CONTRACT&quot;: &quot;3&quot;}
+          p = subprocess.Popen([os.path.join(root, argv[0])] + argv[1:], cwd=root, env=env)
+          url = &quot;http://127.0.0.1:%d%s&quot; % (port, m.get(&quot;health_path&quot;, &quot;/&quot;))
+          for _ in range(300):
+              try:
+                  if urllib.request.urlopen(url, timeout=1).status &lt; 400:
+                      break
+              except Exception:
+                  time.sleep(0.1)
+          else:
+              p.kill(); sys.exit(&quot;health check failed: &quot; + url)
+          p.send_signal(signal.SIGTERM)
+          p.wait(timeout=10)
+          print(&quot;healthy at&quot;, url, &quot;and stopped on SIGTERM&quot;)
+          PY
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create &quot;$GITHUB_REF_NAME&quot; dist/* --title &quot;$GITHUB_REF_NAME&quot; --generate-notes --verify-tag
+</code></pre>
+<p>The workflow runs <code>TEST</code>, builds both architectures, packages <code>app-linux-amd64.tar.gz</code> and <code>app-linux-arm64.tar.gz</code>, writes <code>checksums.txt</code>, starts the amd64 package exactly as binboat would and waits for <code>health_path</code>, and only then publishes the release. Nothing is deployed yet: the release appears in the app's <strong>Deploy</strong> menu in binboat, and you pick when.</p>
+<ul>
+<li>Tags must match <code>v*</code> and use only letters, digits, <code>.</code>, <code>_</code> and <code>-</code> (e.g. <code>v1.4.0</code>, <code>v1.4.0-rc1</code>); the tag becomes <code>BINBOAT_RELEASE</code>.</li>
+<li>Push the workflow file in a commit <strong>before</strong> the first tag: a tag pushed together with the repository's first commit does not start the workflow.</li>
+<li>Builds run on GitHub's runners, never on your server. Private repos work: binboat downloads assets with the GitHub token from its settings (<em>Contents: Read-only</em>).</li>
+<li>The tarball is unpacked read-only (owned by root). Anything the app writes goes in <code>$DATA_DIR</code> or <code>$TMPDIR</code>.</li>
+</ul>
+<h3 id="23-sqlite-in-the-build">2.3 SQLite in the build</h3>
+<p><code>musl</code> targets give static binaries that don't depend on the server's libc, so SQLite is compiled in from source. (Go apps: see §2.4.)</p>
+<p><strong>C</strong> (<code>Makefile</code>): download the amalgamation once, verify it, compile it with the app. <code>CC</code> comes from the workflow.</p>
+<pre><code class="language-make">SQLITE_VER := 3530400
+SQLITE_TGZ := sqlite-autoconf-$(SQLITE_VER).tar.gz
+CFLAGS += -O2 -std=c11 -Wall -D_GNU_SOURCE -Ithird_party
+
+build/myapp: src/main.c build/sqlite3.o
+    mkdir -p build &amp;&amp; $(CC) $(CFLAGS) -o $@ src/main.c build/sqlite3.o -lm
+build/sqlite3.o: third_party/sqlite3.c
+    mkdir -p build &amp;&amp; $(CC) -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -c -o $@ $&lt;
+third_party/sqlite3.c:
+    mkdir -p third_party
+    curl -fsSL -o third_party/$(SQLITE_TGZ) https://sqlite.org/2026/$(SQLITE_TGZ)
+    echo &quot;&lt;sha256 of the tarball&gt;  third_party/$(SQLITE_TGZ)&quot; | sha256sum -c -
+    tar -xzf third_party/$(SQLITE_TGZ) -C third_party --strip-components=1 \
+        sqlite-autoconf-$(SQLITE_VER)/sqlite3.c sqlite-autoconf-$(SQLITE_VER)/sqlite3.h
+test: ...   # build and run your tests
+</code></pre>
+<p><strong>Zig</strong> (0.16): add the amalgamation zip as a dependency with <code>zig fetch --save https://sqlite.org/2026/sqlite-amalgamation-3530400.zip</code>, then in <code>build.zig</code>:</p>
+<pre><code class="language-zig">const sqlite = b.dependency(&quot;sqlite&quot;, .{});
+const c = b.addTranslateC(.{ .root_source_file = sqlite.path(&quot;sqlite3.h&quot;), .target = target, .optimize = optimize });
+const mod = b.createModule(.{
+    .root_source_file = b.path(&quot;src/main.zig&quot;), .target = target, .optimize = optimize, .link_libc = true,
+    .imports = &amp;.{.{ .name = &quot;c&quot;, .module = c.createModule() }},   // @import(&quot;c&quot;) in main.zig
+});
+mod.addCSourceFile(.{ .file = sqlite.path(&quot;sqlite3.c&quot;), .flags = &amp;.{ &quot;-DSQLITE_THREADSAFE=0&quot;, &quot;-DSQLITE_OMIT_LOAD_EXTENSION&quot; } });
+b.installArtifact(b.addExecutable(.{ .name = &quot;myapp&quot;, .root_module = mod }));
+const tests = b.addTest(.{ .root_module = mod });
+b.step(&quot;test&quot;, &quot;Run the tests&quot;).dependOn(&amp;b.addRunArtifact(tests).step);
+</code></pre>
+<h3 id="24-go-apps">2.4 Go apps</h3>
+<p>A Go app needs no toolchain beyond Go itself. Build with <code>CGO_ENABLED=0</code> so the binary is static, and use a <strong>pure-Go</strong> SQLite driver such as <a href="https://pkg.go.dev/modernc.org/sqlite" rel="noopener"><code>modernc.org/sqlite</code></a>. Drivers that need cgo (like <code>mattn/go-sqlite3</code>) produce a binary that depends on the build machine's libc, which binboat can't guarantee on the server.</p>
+<p><code>binboat.toml</code> for an app whose binary is called <code>myapp</code>:</p>
+<pre><code class="language-toml">contract    = 3
+run         = &quot;myapp&quot;
+health_path = &quot;/healthz&quot;
+</code></pre>
+<p>Use this as <code>.github/workflows/release.yml</code> instead of the workflow in §2.2. Edit <code>BIN</code> (the binary name, which must match <code>run</code>) and <code>EXTRA</code> (other files or folders the app reads at runtime, such as <code>templates static</code>; may be empty). The Go version comes from your <code>go.mod</code>.</p>
+<pre><code class="language-yaml"># Tests, builds and publishes this app as a GitHub release that binboat can
+# deploy. Release with:  git tag v1.0.0 &amp;&amp; git push origin v1.0.0
+# A failing test, build or smoke test publishes nothing. Nothing is deployed
+# either: the release shows up in the app's Deploy menu in binboat.
+name: release
+
+on:
+  push:
+    tags: [&quot;v*&quot;]
+
+permissions:
+  contents: write # create the release
+
+env:
+  BIN: myapp
+  EXTRA: &quot;templates static&quot;
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build and package
+        run: |
+          set -euo pipefail
+          rm -rf dist &amp;&amp; mkdir dist
+          for arch in amd64 arm64; do
+            pkg=&quot;$(mktemp -d)&quot; &amp;&amp; chmod 755 &quot;$pkg&quot;
+            CGO_ENABLED=0 GOOS=linux GOARCH=&quot;$arch&quot; go build -trimpath -ldflags &quot;-s -w&quot; -o &quot;$pkg/$BIN&quot; .
+            cp binboat.toml &quot;$pkg/&quot;
+            for f in $EXTRA; do
+              mkdir -p &quot;$pkg/$(dirname &quot;$f&quot;)&quot;
+              cp -R &quot;$f&quot; &quot;$pkg/$f&quot;
+            done
+            tar -czf &quot;dist/app-linux-$arch.tar.gz&quot; -C &quot;$pkg&quot; .
+            rm -rf &quot;$pkg&quot;
+          done
+          (cd dist &amp;&amp; sha256sum app-linux-*.tar.gz &gt; checksums.txt)
+          cat dist/checksums.txt
+
+      - name: Smoke test (start the amd64 package as binboat would)
+        run: |
+          set -euo pipefail
+          python3 - &lt;&lt;'PY'
+          import os, shlex, signal, socket, subprocess, sys, tarfile, tempfile, time, tomllib, urllib.request
+          root = tempfile.mkdtemp()
+          with tarfile.open(&quot;dist/app-linux-amd64.tar.gz&quot;) as t:
+              t.extractall(root, filter=&quot;data&quot;)
+          m = tomllib.load(open(os.path.join(root, &quot;binboat.toml&quot;), &quot;rb&quot;))
+          assert m.get(&quot;contract&quot;) == 3, &quot;binboat.toml: contract must be 3&quot;
+          argv = shlex.split(m[&quot;run&quot;])
+          s = socket.socket(); s.bind((&quot;127.0.0.1&quot;, 0)); port = s.getsockname()[1]; s.close()
+          data, tmp = tempfile.mkdtemp(), tempfile.mkdtemp()
+          env = {&quot;PATH&quot;: &quot;/usr/bin:/bin&quot;, &quot;HOST&quot;: &quot;127.0.0.1&quot;, &quot;PORT&quot;: str(port), &quot;DATA_DIR&quot;: data, &quot;TMPDIR&quot;: tmp,
+                 &quot;BINBOAT_APP&quot;: &quot;smoke&quot;, &quot;BINBOAT_RELEASE&quot;: os.environ.get(&quot;GITHUB_REF_NAME&quot;, &quot;smoke&quot;), &quot;BINBOAT_CONTRACT&quot;: &quot;3&quot;}
+          p = subprocess.Popen([os.path.join(root, argv[0])] + argv[1:], cwd=root, env=env)
+          url = &quot;http://127.0.0.1:%d%s&quot; % (port, m.get(&quot;health_path&quot;, &quot;/&quot;))
+          for _ in range(300):
+              try:
+                  if urllib.request.urlopen(url, timeout=1).status &lt; 400:
+                      break
+              except Exception:
+                  time.sleep(0.1)
+          else:
+              p.kill(); sys.exit(&quot;health check failed: &quot; + url)
+          p.send_signal(signal.SIGTERM)
+          p.wait(timeout=10)
+          print(&quot;healthy at&quot;, url, &quot;and stopped on SIGTERM&quot;)
+          PY
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create &quot;$GITHUB_REF_NAME&quot; dist/* --title &quot;$GITHUB_REF_NAME&quot; --generate-notes --verify-tag
+</code></pre>
+<p>It behaves like the workflow in §2.2: tests first, both architectures, checksums, a smoke test that starts the package as binboat would, and only then the release. The rest of §2.2 (tag rules, pushing the workflow before the first tag, private repos) applies unchanged.</p>
+<p><strong>Memory.</strong> binboat sets <code>GOMEMLIMIT</code> to 90% of the app's memory limit (unless you set <code>GOMEMLIMIT</code> yourself in the dashboard), because the Go runtime doesn't read cgroup limits. The garbage collector then works harder as the app nears its limit instead of letting the kernel kill it. <code>GOMAXPROCS</code> follows the app's CPU limit automatically with Go 1.25 and newer.</p>
+<h2 id="3-environment-variables-binboat-provides">3. Environment variables binboat provides</h2>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Example</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PORT</code></td>
+<td><code>20001</code></td>
+<td>The port to listen on. It stays the same for an app across deploys.</td>
+</tr>
+<tr>
+<td><code>HOST</code></td>
+<td><code>127.0.0.1</code></td>
+<td>The address to bind to. Always bind here, never to <code>0.0.0.0</code>.</td>
+</tr>
+<tr>
+<td><code>DATA_DIR</code></td>
+<td><code>/var/lib/binboat/apps/blog/data</code></td>
+<td>Persistent and survives every deploy. Its SQLite files are backed up; nothing else in it is (§5).</td>
+</tr>
+<tr>
+<td><code>TMPDIR</code></td>
+<td><code>/var/lib/binboat/apps/blog/tmp</code></td>
+<td>Scratch space that may be wiped on every deploy.</td>
+</tr>
+<tr>
+<td><code>BINBOAT_APP</code></td>
+<td><code>blog</code></td>
+<td>The app's name (from the repository name).</td>
+</tr>
+<tr>
+<td><code>BINBOAT_DOMAIN</code></td>
+<td><code>blog.example.com</code></td>
+<td>The public domain.</td>
+</tr>
+<tr>
+<td><code>BINBOAT_RELEASE</code></td>
+<td><code>v1.4.0</code></td>
+<td>The deployed release (its tag).</td>
+</tr>
+<tr>
+<td><code>BINBOAT_CONTRACT</code></td>
+<td><code>3</code></td>
+<td>The contract version.</td>
+</tr>
+</tbody>
+</table></div>
+<p>binboat also sets <code>PATH</code> and <code>LANG</code>, and adds your own env vars from the dashboard; nothing else is inherited (no <code>HOME</code>). The one extra: <code>GOMEMLIMIT</code> is set to 90% of the memory limit unless you define it yourself (§2.4); other languages ignore it. Names starting with <code>BINBOAT_</code>, and the names in the table above, are reserved. Changing env vars requires a <strong>Restart</strong>, not a new release.</p>
+<h2 id="4-http-rules">4. HTTP rules</h2>
+<ul>
+<li>Serve <strong>plain HTTP/1.1</strong>. binboat handles TLS in front of your app.</li>
+<li>Headers you can rely on:</li>
+<li><code>Host</code>: your domain.</li>
+<li><code>X-Forwarded-Proto: https</code> and <code>X-Forwarded-Host</code> (your domain).</li>
+<li><code>X-Forwarded-For</code> and <code>X-Real-IP</code>: the <strong>real visitor IP</strong>, taken from Cloudflare's <code>CF-Connecting-IP</code>. Whatever the visitor sent in these headers is replaced, so they are safe to trust.</li>
+<li><code>CF-Connecting-IP</code> and <code>CF-IPCountry</code>, passed through from Cloudflare.</li>
+<li>WebSockets, long-polling and streamed responses (SSE) work; responses are flushed to the visitor immediately.</li>
+<li>Cloudflare limits request bodies to 100 MB on the free plan, so keep uploads smaller than that.</li>
+<li>While a deploy is running, visitors see a short binboat "deploying" 503 page. Expect well under a second of downtime, plus however long your app takes to become healthy.</li>
+<li>While your app is stopped or crashed, visitors get a binboat 503 page; if it stops answering unexpectedly, a 502.</li>
+</ul>
+<h2 id="5-filesystem-rules">5. Filesystem rules</h2>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Access</th>
+<th>Survives deploy?</th>
+<th>Backed up?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Release dir (the unpacked tarball, current working dir)</td>
+<td>read-only</td>
+<td>replaced</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>$DATA_DIR</code></td>
+<td>read/write</td>
+<td>✅ yes</td>
+<td>✅ SQLite files</td>
+</tr>
+<tr>
+<td><code>$TMPDIR</code></td>
+<td>read/write</td>
+<td>❌ may be wiped</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Other apps' folders, binboat's files</td>
+<td>no access</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>Static files and templates in the tarball can be read with relative paths, because the working directory is the release dir. List them in <code>FILES</code> (§2.2).</li>
+<li><strong>Only SQLite databases in <code>$DATA_DIR</code> are backed up</strong> (sub-folders included). binboat finds them by their file header, whatever their name.</li>
+<li><strong>Everything else in <code>$DATA_DIR</code> is yours.</strong> Uploads, caches, generated files and so on are kept across deploys, restarts and rollbacks, but binboat does not back them up, copy them to the bucket or restore them. They are not part of a <strong>Restore</strong>, and they are lost if the server is lost. An app that needs those files protected must do it itself, for example by storing them in an object store or by exporting them on a schedule. This is a deliberate boundary, not a missing feature: binboat backs up its apps' databases and nothing more.</li>
+<li>Data an app can't afford to lose belongs in SQLite. Small amounts of state (settings, counters, sessions, even small blobs) fit there and get backed up with everything else.</li>
+<li>Don't rely on <code>$TMPDIR</code> for anything you need later; it is emptied on every deploy.</li>
+<li>Don't create folders named <code>.pre-restore-*</code> in <code>$DATA_DIR</code>: binboat uses them to keep the previous databases after a restore.</li>
+</ul>
+<h2 id="6-sqlite-rules">6. SQLite rules</h2>
+<ol>
+<li>Open databases <strong>only</strong> from <code>$DATA_DIR</code>, for example <code>$DATA_DIR/app.db</code>.</li>
+<li>Recommended settings on every connection:
+   <code>sql
+   PRAGMA journal_mode = WAL;
+   PRAGMA busy_timeout = 5000;
+   PRAGMA foreign_keys = ON;
+   PRAGMA synchronous = NORMAL;</code>
+   Backups read the database while your app is running. <code>busy_timeout</code> makes sure a backup never causes a "database is locked" error in your app.</li>
+<li><strong>Run migrations at startup</strong>, before you start listening. binboat takes a backup right before every deploy, so a bad migration can be undone with <strong>Restore</strong> in the dashboard.</li>
+<li>Migrations should only move forward, and ideally stay compatible with the previous release. Rolling back the code does <strong>not</strong> roll back the database.</li>
+</ol>
+<h2 id="7-lifecycle">7. Lifecycle</h2>
+<pre><code>start ──► app runs migrations ──► listens on HOST:PORT ──► health_path returns 2xx ──► receives traffic
+                                                                                           │
+SIGTERM (deploy / restart / stop) ──► finish requests, close DB ──► exit 0 ◄──────────────┘
+                                  └─► after 10 s: SIGKILL
+</code></pre>
+<ul>
+<li>binboat starts your binary directly and supervises it. If it crashes, binboat restarts it with backoff (1 s, 2 s, 4 s … up to 60 s). After 5 crashes in 5 minutes, the app is marked <strong>crashed</strong> and left stopped.</li>
+<li>Don't daemonize, double-fork or write PID files.</li>
+<li>When the main process exits, binboat kills anything else still running in the app's cgroup.</li>
+<li>stdout is a pipe, not a terminal, so C's stdio buffers it fully by default. Call <code>setvbuf(stdout, NULL, _IOLBF, 0)</code> at startup (or write logs to stderr), otherwise log lines appear late or are lost on a crash. <code>std.debug.print</code> in Zig writes unbuffered to stderr, and so does Go's <code>log</code> package.</li>
+<li>Lines longer than 16 KB are split into several log lines.</li>
+</ul>
+<h2 id="8-resource-limits-defaults-editable-per-app">8. Resource limits (defaults, editable per app)</h2>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Limit</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Memory (<code>memory.max</code>)</td>
+<td>256 MB, no swap. The app is OOM-killed and restarted if it goes above this. Go apps also get <code>GOMEMLIMIT</code> at 90% of it (§2.4).</td>
+</tr>
+<tr>
+<td>CPU (<code>cpu.max</code>)</td>
+<td>1 core</td>
+</tr>
+<tr>
+<td>Processes/threads (<code>pids.max</code>)</td>
+<td>256</td>
+</tr>
+<tr>
+<td>Open files</td>
+<td>4096</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="9-reading-the-contract-in-code">9. Reading the contract in code</h2>
+<h3 id="c">C</h3>
+<pre><code class="language-c">#include &lt;stdlib.h&gt;
+
+const char *host     = getenv(&quot;HOST&quot;);      // &quot;127.0.0.1&quot;
+int         port     = atoi(getenv(&quot;PORT&quot;));
+const char *data_dir = getenv(&quot;DATA_DIR&quot;);
+// db path: snprintf(path, sizeof path, &quot;%s/app.db&quot;, data_dir);
+</code></pre>
+<p>Handle SIGTERM:</p>
+<pre><code class="language-c">#include &lt;signal.h&gt;
+static volatile sig_atomic_t stop = 0;
+static void on_term(int s) { (void)s; stop = 1; }
+// in main: signal(SIGTERM, on_term);  then have your accept loop check `stop`
+// (e.g. poll() the listening socket with a 500 ms timeout)
+</code></pre>
+<h3 id="go">Go</h3>
+<pre><code class="language-go">package main
+
+import (
+    &quot;context&quot;
+    &quot;database/sql&quot;
+    &quot;errors&quot;
+    &quot;log&quot;
+    &quot;net/http&quot;
+    &quot;os&quot;
+    &quot;os/signal&quot;
+    &quot;path/filepath&quot;
+    &quot;syscall&quot;
+    &quot;time&quot;
+
+    _ &quot;modernc.org/sqlite&quot; // pure Go, no cgo
+)
+
+func main() {
+    dsn := &quot;file:&quot; + filepath.Join(os.Getenv(&quot;DATA_DIR&quot;), &quot;app.db&quot;) +
+        &quot;?_pragma=journal_mode(WAL)&amp;_pragma=busy_timeout(5000)&amp;_pragma=foreign_keys(1)&amp;_pragma=synchronous(NORMAL)&quot;
+    db, err := sql.Open(&quot;sqlite&quot;, dsn)
+    if err == nil {
+        err = db.Ping() // opens the file; fails fast on a bad DATA_DIR
+    }
+    if err != nil {
+        log.Fatal(err)
+    }
+    // run migrations here, before listening
+
+    mux := http.NewServeMux()
+    mux.HandleFunc(&quot;GET /healthz&quot;, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(&quot;ok&quot;)) })
+    srv := &amp;http.Server{Addr: os.Getenv(&quot;HOST&quot;) + &quot;:&quot; + os.Getenv(&quot;PORT&quot;), Handler: mux}
+
+    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+    defer stop()
+    done := make(chan struct{})
+    go func() {
+        &lt;-ctx.Done()
+        sctx, cancel := context.WithTimeout(context.Background(), 8*time.Second) // binboat kills after 10 s
+        defer cancel()
+        srv.Shutdown(sctx)
+        close(done)
+    }()
+    if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+        log.Fatal(err)
+    }
+    &lt;-done
+    db.Close()
+}
+</code></pre>
+<h3 id="zig">Zig</h3>
+<p>The std API changes between Zig versions, so check the docs for <strong>your <code>ZIG_VERSION</code></strong>. In 0.16 <code>main</code> receives the environment:</p>
+<pre><code class="language-zig">pub fn main(init: std.process.Init) !void {
+    const env = init.environ_map;
+    const port = try std.fmt.parseInt(u16, env.get(&quot;PORT&quot;).?, 10);
+    const data_dir = env.get(&quot;DATA_DIR&quot;).?;
+    // ...
+}
+</code></pre>
+<h2 id="10-minimal-repo-layout-example">10. Minimal repo layout example</h2>
+<pre><code>myapp/
+├── .github/workflows/release.yml   # §2.2
+├── binboat.toml
+├── build.zig                       # or a Makefile for C (§2.3), or go.mod for Go (§2.4)
+├── build.zig.zon
+├── src/main.zig
+├── templates/     # in FILES; read at runtime via relative path
+└── static/
+</code></pre>
+<p>A Go app has <code>go.mod</code>, <code>main.go</code>, <code>binboat.toml</code> and the workflow from §2.4 instead of the Zig or C build files; <code>run</code> is just the binary name.</p></main>
+<footer>binboat is licensed under <a href="https://github.com/sumitwaani2/binboat/blob/main/LICENSE" rel="noopener">Apache 2.0</a> · <a href="https://github.com/sumitwaani2/binboat" rel="noopener">Source on GitHub</a></footer>
+</body>
+</html>

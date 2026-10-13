@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status API · binboat</title>
+<meta name="description" content="binboat&#x27;s read-only status API for scripts and AI agents.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">binboat</a>
+  <nav><a href="index.html">Overview</a><a href="install.html">Install</a><a href="apps.html">Hosting an app</a><a href="api.html" aria-current="page">Status API</a><a href="internals.html">How it works</a><a href="https://github.com/sumitwaani2/binboat" rel="noopener">GitHub</a></nav>
+</header>
+<main>
+<h1 id="binboat-status-api">binboat Status API</h1>
+<nav class="toc" aria-label="On this page"><b>On this page</b><ul><li><a href="#token">Token</a></li><li><a href="#endpoints">Endpoints</a></li><li><a href="#conventions">Conventions</a></li><li><a href="#for-ai-agents">For AI agents</a></li></ul></nav>
+<p>A small <strong>read-only</strong> JSON API for scripts and AI agents: "is my blog up?", "why is the shop unhealthy?", "when was the last backup?". It can't deploy, stop, restart or change anything; that stays in the dashboard.</p>
+<p>Version: <strong>v1</strong>. Base URL: <code>https://&lt;dashboard domain&gt;/api/v1</code>.</p>
+<h2 id="token">Token</h2>
+<ol>
+<li>In the dashboard, open <strong>Account → API token</strong>, enter your password and press <strong>Create token</strong>.</li>
+<li>Copy the token (it starts with <code>bbt_</code>). It is shown <strong>once</strong> and binboat keeps only its SHA-256.</li>
+<li>Send it on every request:</li>
+</ol>
+<pre><code class="language-bash">curl -s -H &quot;Authorization: Bearer $BINBOAT_TOKEN&quot; https://binboat.example.com/api/v1/status
+</code></pre>
+<p>There is one token at a time. <strong>Rotate token</strong> creates a new one and the old one stops working immediately; <strong>Revoke token</strong> turns the API off. The Account page shows when the token was created and last used.</p>
+<ul>
+<li>The API answers only on the dashboard domain, through Cloudflare, behind the same IP filter and origin pulls as the dashboard. It never answers on the server's IP (setup) address.</li>
+<li>The dashboard's session cookie is <strong>not</strong> accepted: only the bearer token.</li>
+<li>Wrong tokens count towards the sign-in rate limit: 5 failures from one IP in 15 minutes block that IP for both sign-in and the API (<code>429</code>), even with the right token.</li>
+<li>Treat the token like a password. It can read app names, domains, repositories, release tags and error messages, but never env var values, other tokens or app data.</li>
+</ul>
+<h2 id="endpoints">Endpoints</h2>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Request</th>
+<th>Returns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /api/v1/status</code></td>
+<td>The whole server: overall <code>ok</code>, host resources, dashboard warnings, a summary of every app</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/apps</code></td>
+<td>Every app (summary form)</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/apps/{name}</code></td>
+<td>One app in detail: process, limits, current usage, last deployment, last backup, domain status, warnings</td>
+</tr>
+</tbody>
+</table></div>
+<p>For an agent, <code>status</code> answers almost everything in one call; use <code>apps/{name}</code> to explain a problem.</p>
+<h3 id="get-apiv1status"><code>GET /api/v1/status</code></h3>
+<pre><code class="language-json">{
+  &quot;ok&quot;: false,
+  &quot;binboat_version&quot;: &quot;v1.1.0&quot;,
+  &quot;time&quot;: &quot;2026-10-12T17:06:27Z&quot;,
+  &quot;host&quot;: {
+    &quot;hostname&quot;: &quot;vps-1&quot;,
+    &quot;uptime_seconds&quot;: 2870,
+    &quot;cpus&quot;: 1,
+    &quot;load_1m&quot;: 0.12,
+    &quot;memory_total_bytes&quot;: 1012310016,
+    &quot;memory_used_bytes&quot;: 402653184,
+    &quot;memory_used_percent&quot;: 39.78,
+    &quot;disk_total_bytes&quot;: 25769803776,
+    &quot;disk_free_bytes&quot;: 19327352832,
+    &quot;disk_used_percent&quot;: 25
+  },
+  &quot;summary&quot;: { &quot;apps&quot;: 2, &quot;healthy&quot;: 1, &quot;unhealthy&quot;: 1 },
+  &quot;warnings&quot;: [
+    &quot;shop has crashed and is not being restarted: exit status 1&quot;
+  ],
+  &quot;apps&quot;: [
+    {
+      &quot;name&quot;: &quot;blog&quot;,
+      &quot;state&quot;: &quot;running&quot;,
+      &quot;healthy&quot;: true,
+      &quot;domain&quot;: &quot;blog.example.com&quot;,
+      &quot;url&quot;: &quot;https://blog.example.com/&quot;,
+      &quot;release&quot;: &quot;v1.4.0&quot;,
+      &quot;deploying&quot;: false,
+      &quot;needs_restart&quot;: false,
+      &quot;memory_bytes&quot;: 31457280,
+      &quot;memory_limit_bytes&quot;: 268435456,
+      &quot;requests_since_start&quot;: 18230,
+      &quot;requests_5xx_since_start&quot;: 3,
+      &quot;last_backup_at&quot;: &quot;2026-10-12T15:00:04Z&quot;,
+      &quot;backup_problem&quot;: &quot;&quot;
+    }
+  ]
+}
+</code></pre>
+<ul>
+<li><code>ok</code> is <code>true</code> when every app is healthy. Warnings (disk filling up, a failed backup, a missing setup step) don't change <code>ok</code>; read them too.</li>
+<li><code>warnings</code> are the same messages the dashboard home page shows.</li>
+</ul>
+<h3 id="app-fields">App fields</h3>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>state</code></td>
+<td><code>running</code>, <code>starting</code>, <code>stopping</code>, <code>stopped</code>, <code>backoff</code> (restarting after a crash), <code>crashed</code> (gave up after 5 crashes in 5 minutes; needs <strong>Start</strong> in the dashboard), <code>unknown</code> (failed to load; see the server log)</td>
+</tr>
+<tr>
+<td><code>healthy</code></td>
+<td><code>true</code> when running and passing its health check, or stopped on purpose. <code>false</code> when crashed, restarting, starting, stopped although it should run, or never deployed</td>
+</tr>
+<tr>
+<td><code>release</code></td>
+<td>The deployed release tag; <code>""</code> if never deployed</td>
+</tr>
+<tr>
+<td><code>deploying</code></td>
+<td>A deployment is queued or running</td>
+</tr>
+<tr>
+<td><code>needs_restart</code></td>
+<td>Env vars or limits changed and apply on the next restart</td>
+</tr>
+<tr>
+<td><code>memory_bytes</code> / <code>memory_limit_bytes</code></td>
+<td>Current memory use and the limit at which the app is killed</td>
+</tr>
+<tr>
+<td><code>requests_since_start</code>, <code>requests_5xx_since_start</code></td>
+<td>Proxy counters since binboat started</td>
+</tr>
+<tr>
+<td><code>last_backup_at</code></td>
+<td>Newest successful backup, <code>null</code> if none</td>
+</tr>
+<tr>
+<td><code>backup_problem</code></td>
+<td>Non-empty when the latest backup failed or wasn't uploaded to the bucket</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="get-apiv1appsname"><code>GET /api/v1/apps/{name}</code></h3>
+<p>Everything above, plus:</p>
+<pre><code class="language-json">{
+  &quot;repo&quot;: &quot;https://github.com/me/shop&quot;,
+  &quot;process&quot;: {
+    &quot;pid&quot;: 0,
+    &quot;started_at&quot;: &quot;2026-10-12T16:58:10Z&quot;,
+    &quot;healthy_at&quot;: null,
+    &quot;restarts&quot;: 5,
+    &quot;oom_kills&quot;: 0,
+    &quot;last_exit&quot;: &quot;exit status 1&quot;,
+    &quot;last_exit_at&quot;: &quot;2026-10-12T16:58:11Z&quot;,
+    &quot;last_error&quot;: &quot;exit status 1&quot;,
+    &quot;next_start_at&quot;: null
+  },
+  &quot;limits&quot;: { &quot;memory_bytes&quot;: 268435456, &quot;cpu_cores&quot;: 1, &quot;processes&quot;: 256 },
+  &quot;now&quot;: {
+    &quot;at&quot;: &quot;2026-10-12T17:06:20Z&quot;,
+    &quot;cpu_percent_of_one_core&quot;: 0,
+    &quot;memory_bytes&quot;: 0,
+    &quot;processes&quot;: 0,
+    &quot;requests_per_minute&quot;: 0,
+    &quot;errors_5xx_per_minute&quot;: 0,
+    &quot;latency_p50_ms&quot;: null,
+    &quot;latency_p95_ms&quot;: null,
+    &quot;disk_read_bytes_per_second&quot;: 0,
+    &quot;disk_write_bytes_per_second&quot;: 0
+  },
+  &quot;last_deployment&quot;: {
+    &quot;id&quot;: 12, &quot;kind&quot;: &quot;deploy&quot;, &quot;status&quot;: &quot;succeeded&quot;, &quot;release&quot;: &quot;v2.0.1&quot;,
+    &quot;started_at&quot;: &quot;2026-10-11T09:12:00Z&quot;, &quot;finished_at&quot;: &quot;2026-10-11T09:12:04Z&quot;, &quot;error&quot;: &quot;&quot;
+  },
+  &quot;last_backup&quot;: {
+    &quot;id&quot;: 88, &quot;kind&quot;: &quot;scheduled&quot;, &quot;status&quot;: &quot;ok&quot;, &quot;created_at&quot;: &quot;2026-10-12T15:00:04Z&quot;,
+    &quot;size_bytes&quot;: 482133, &quot;in_bucket&quot;: true, &quot;on_server&quot;: true, &quot;release&quot;: &quot;v2.0.1&quot;, &quot;error&quot;: &quot;&quot;
+  },
+  &quot;domain_status&quot;: { &quot;dns&quot;: &quot;ok&quot;, &quot;certificate_valid_until&quot;: &quot;2041-10-01T00:00:00Z&quot;, &quot;error&quot;: &quot;&quot; },
+  &quot;warnings&quot;: [&quot;crashed and not being restarted: exit status 1&quot;]
+}
+</code></pre>
+<ul>
+<li><code>now</code> is the newest 10-second sample, <code>null</code> until the first one; percentiles are <code>null</code> without traffic.</li>
+<li><code>last_deployment</code>, <code>last_backup</code> and <code>domain_status</code> are <code>null</code> when there is none.</li>
+<li><code>warnings</code> explains, in plain words, why the app is unhealthy or needs attention.</li>
+</ul>
+<h2 id="conventions">Conventions</h2>
+<ul>
+<li>Times are UTC, RFC 3339; unknown times are <code>null</code>. Sizes are bytes; numbers are rounded to 2 decimals.</li>
+<li>Errors are JSON with an <code>error</code> message: <code>401</code> (missing or wrong token), <code>403</code> (setup address), <code>404</code> (unknown app or endpoint), <code>405</code> (anything but <code>GET</code>/<code>HEAD</code>), <code>429</code> (rate limited; <code>Retry-After</code> in seconds), <code>500</code>.</li>
+<li>New fields may be added within v1; existing ones keep their name and meaning.</li>
+</ul>
+<h2 id="for-ai-agents">For AI agents</h2>
+<p>Give the agent the base URL, the token and this page. A tool definition only needs one function, for example <code>get(path)</code> that calls <code>GET &lt;base URL&gt;&lt;path&gt;</code> with the header. Questions it can then answer:</p>
+<ul>
+<li>"Is everything OK?" → <code>/status</code>: <code>ok</code>, <code>summary</code>, <code>warnings</code>.</li>
+<li>"Why is shop down?" → <code>/apps/shop</code>: <code>state</code>, <code>process.last_error</code>, <code>warnings</code>, <code>last_deployment.error</code>.</li>
+<li>"When was the blog last backed up?" → <code>last_backup_at</code>, or <code>last_backup</code> in <code>/apps/blog</code>.</li>
+<li>"Is the server running out of memory or disk?" → <code>host</code> in <code>/status</code>.</li>
+</ul>
+<p>The agent can't fix anything through the API; it can tell you what to do in the dashboard.</p></main>
+<footer>binboat is licensed under <a href="https://github.com/sumitwaani2/binboat/blob/main/LICENSE" rel="noopener">Apache 2.0</a> · <a href="https://github.com/sumitwaani2/binboat" rel="noopener">Source on GitHub</a></footer>
+</body>
+</html>

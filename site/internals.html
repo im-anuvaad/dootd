@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it works · binboat</title>
+<meta name="description" content="binboat&#x27;s architecture, on-disk layout, edge, deploys, backups and design decisions.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">binboat</a>
+  <nav><a href="index.html">Overview</a><a href="install.html">Install</a><a href="apps.html">Hosting an app</a><a href="api.html">Status API</a><a href="internals.html" aria-current="page">How it works</a><a href="https://github.com/sumitwaani2/binboat" rel="noopener">GitHub</a></nav>
+</header>
+<main>
+<h1 id="binboat-architecture">binboat Architecture</h1>
+<nav class="toc" aria-label="On this page"><b>On this page</b><ul><li><a href="#1-what-and-why">1. What and why</a></li><li><a href="#2-stack-and-code">2. Stack and code</a></li><li><a href="#3-on-disk">3. On disk</a></li><li><a href="#4-install-setup-address-updates">4. Install, setup address, updates</a></li><li><a href="#5-edge">5. Edge</a></li><li><a href="#6-apps-and-processes">6. Apps and processes</a></li><li><a href="#7-releases-and-deploys">7. Releases and deploys</a></li><li><a href="#8-backups-and-restore">8. Backups and restore</a></li><li><a href="#9-monitoring">9. Monitoring</a></li><li><a href="#10-dashboard-and-security">10. Dashboard and security</a></li><li><a href="#11-budget-measured-on-the-real-vps-1-vcpu-5-apps">11. Budget (measured on the real VPS, 1 vCPU, 5 apps)</a></li><li><a href="#12-changing-binboat">12. Changing binboat</a></li><li><a href="#13-decisions">13. Decisions</a></li></ul></nav>
+<p>Reference for whoever maintains binboat. The rules for hosted apps are in <a href="apps.html">Hosting an app</a>; installing and using it is in the <a href="install.html">Install and set up</a>.</p>
+<h2 id="1-what-and-why">1. What and why</h2>
+<p>A single static Go binary that hosts about 5 small server-rendered SQLite web apps (Go, Zig or C) on one Ubuntu 24.04+ VPS behind Cloudflare, for <strong>one non-technical user</strong>.</p>
+<ul>
+<li><strong>One SSH command, then only the dashboard.</strong> The installer prints a one-time password; the admin account, tokens, dashboard domain, bucket, apps, env vars, deploys, logs, backups and restores are all in the browser. No admin CLI, no config file, no optional features; one way to do each thing (D33). The only other interface is a read-only status API (D47).</li>
+<li><strong>binboat never builds.</strong> Each app's GitHub Actions workflow tests and builds it and publishes a GitHub release; binboat downloads, verifies and runs it (D38).</li>
+<li><strong>Cloudflare in front, Full (strict), origin reachable only through the user's own Cloudflare account</strong> (IP filter + zone-level Authenticated Origin Pulls).</li>
+<li><strong>SQLite backups</strong> to any S3-compatible bucket, RPO ≤ 3 h.</li>
+<li><strong>Small:</strong> &lt; 30 MB RSS idle, no other daemons.</li>
+</ul>
+<p>Non-goals: several machines or users, containers or strong multi-tenant isolation (apps are trusted), zero-downtime deploys (stop-then-start is safe with one SQLite writer), deploys on push, non-Cloudflare setups, self-update, backups of binboat's own settings.</p>
+<p>Assumptions: Ubuntu ≥ 24.04 (x86_64/arm64), systemd, cgroup v2, 1–2 GB RAM, ≤ 5 apps, public ports 22 and 443 only; 1 dashboard user, 1 GitHub PAT, 1 Cloudflare API token, 1 bucket.</p>
+<h2 id="2-stack-and-code">2. Stack and code</h2>
+<p>Go, <code>CGO_ENABLED=0</code>, static <code>linux/amd64</code> + <code>linux/arm64</code>. stdlib for HTTP, TLS, reverse proxy, GitHub REST, tar/gzip; <code>modernc.org/sqlite</code> (pure Go) for binboat's own DB; <code>x/crypto/argon2</code>; <code>minio-go</code> for S3/R2; <code>klauspost/compress/zstd</code>; <code>BurntSushi/toml</code> for <code>binboat.toml</code>. Dashboard: <code>html/template</code>, one CSS file, ~60 lines of vanilla JS, all <code>go:embed</code>. Rule: add a module only when the stdlib would need ~300+ lines of risky code.</p>
+<pre><code>cmd/binboat/        serve (systemd), setup-host (installer), version
+contrib/systemd/  binboat.service, embedded in the binary
+internal/
+  store/          SQLite (WAL, single writer), embedded migrations
+  secrets/        master.key, AES-256-GCM seal/open with purpose as associated data
+  auth/           argon2id, sessions, CSRF, rate limit, one-time password
+  web/            dashboard handlers, templates, static, SSE, SVG charts, read-only JSON API
+  apps/           app registry (apps + sealed env), create/update/delete, restore on add
+  edge/           listener, IP filter, setup address, certificates, AOP, router, proxy, Cloudflare sync
+  cloudflare/     minimal REST client
+  github/         PAT check, repos, releases, asset downloads
+  artifact/       tarball verification, safe unpack, ELF check
+  manifest/       binboat.toml parsing
+  deployer/       queue + pipeline, releases, rollback, history
+  supervisor/     process lifecycle, restart policy, health check
+  cgroup/ users/  cgroup v2 tree and limits; per-app system users
+  backup/ s3/     snapshots, archives, upload, retention, restore, bucket folders
+  metrics/ logs/  sampling + rollups; rotating logs + live tail
+  layout/ hostinfo/ app/ buildinfo/
+</code></pre>
+<p>All components are goroutines in one process (the systemd unit), talking through Go interfaces. binboat runs as root (port 443, users, cgroups, chown); apps never do.</p>
+<h2 id="3-on-disk">3. On disk</h2>
+<pre><code>/usr/local/bin/binboat
+/etc/binboat/master.key                  32 random bytes (hex), 0600, never overwritten
+/etc/systemd/system/binboat.service
+/var/lib/binboat/                        0711
+  binboat.db                             all state and settings
+  setup/{cert,key}.pem                 self-signed cert of the setup address
+  certs/&lt;host&gt;/{cert,key}.pem          Origin CA certs (0600)
+  aop/{ca,client}.{pem,key}            binboat's AOP CA (RSA 3072, 10 y) + client cert (RSA 2048, 5 y)
+  downloads/&lt;app&gt;/&lt;deployment&gt;/        download + unpack workspace (emptied at start)
+  apps/&lt;app&gt;/releases/&lt;tag&gt;/           unpacked release, root-owned, read-only for the app
+  apps/&lt;app&gt;/current -&gt; releases/&lt;tag&gt;
+  apps/&lt;app&gt;/data/  tmp/               DATA_DIR, TMPDIR (0700, app user)
+  apps/&lt;app&gt;/logs/app.log[.1-3]        runtime log (10 MB × 3)
+  apps/&lt;app&gt;/logs/builds/&lt;id&gt;.log      deploy logs (last 20)
+  backups/staging/  backups/local/&lt;app&gt;/   temp snapshots; newest archives
+  deleted/&lt;app&gt;-&lt;time&gt;/data/           data kept when an app is deleted
+</code></pre>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Table</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>settings</code></td>
+<td><code>dashboard_domain</code>, <code>dashboard_reached</code>, <code>setup_password</code> (argon2id hash, expiry, used), <code>api_token</code> (SHA-256, created, last used), GitHub token<em>, Cloudflare token</em>, <code>s3_config</code>*, Cloudflare IP ranges</td>
+</tr>
+<tr>
+<td><code>users</code></td>
+<td>id 1 only: email, argon2id hash</td>
+</tr>
+<tr>
+<td><code>sessions</code></td>
+<td>SHA-256 of the token, csrf, created/last seen, ip, user agent, <code>setup</code> flag</td>
+</tr>
+<tr>
+<td><code>apps</code>, <code>app_env</code></td>
+<td>name, repo, domain, port, limits; env values*</td>
+</tr>
+<tr>
+<td><code>app_state</code></td>
+<td>desired state (running/stopped)</td>
+</tr>
+<tr>
+<td><code>deployments</code>, <code>releases</code></td>
+<td>history (kind, status, release, error, times); kept releases (tag, sha256, run argv, health path)</td>
+</tr>
+<tr>
+<td><code>backups</code></td>
+<td>kind, status, object key, local path, size, sha256, release, error</td>
+</tr>
+<tr>
+<td><code>edge_certs</code>, <code>edge_zones</code></td>
+<td>per host: zone, Cloudflare cert id, expiry; per zone: SSL mode, AOP cert id/serial, AOP enforced</td>
+</tr>
+<tr>
+<td><code>metrics_1m</code></td>
+<td>7 days of 1-minute rollups per scope (<code>_host</code>, <code>_binboat</code>, app)</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>*</code> sealed with AES-256-GCM (<code>master.key</code>), purpose-bound (<code>settings:cloudflare_token</code>, <code>app_env:&lt;app&gt;:&lt;NAME&gt;</code> …), never shown in the UI. Migrations are numbered, one transaction each; a failing one rolls back and binboat refuses to start; a schema newer than the binary is refused naming both versions. binboat refuses to start if <code>master.key</code> is group/other-accessible or malformed. Columns of removed features stay unused (<code>apps.type/branch/path/build_*</code>, <code>releases.git_sha/branch/subdir/zig_version</code>).</p>
+<h2 id="4-install-setup-address-updates">4. Install, setup address, updates</h2>
+<p><code>install.sh</code> (the only SSH step) asks nothing and installs no packages: checks Ubuntu ≥ 24.04, systemd, cgroup v2, CPU; downloads <code>binboat-linux-&lt;arch&gt;</code> + <code>checksums.txt</code> from the latest release (or <code>BINBOAT_VERSION=vX.Y.Z</code>), verifies SHA-256 and that the binary runs (changes nothing otherwise); stops binboat, installs the binary, runs <code>binboat setup-host</code>: creates the directories and <code>master.key</code>, writes and enables the embedded systemd unit (D28), runs migrations, stores a <strong>new one-time password</strong> (argon2id, 24 h), starts binboat and prints the setup address <code>https://&lt;public IPv4&gt;</code>, the password and the dashboard domain if any. Re-running it is the <strong>update</strong> (keeps everything; apps restart) and the <strong>recovery</strong> path (forgotten password, broken domain). binboat never updates itself (D35).</p>
+<p>Unit essentials: <code>ExecStart=binboat serve</code>, <code>Restart=always</code> with growing delay (2 s → 60 s, never gives up), <code>Delegate=yes</code>, <code>KillMode=mixed</code>, <code>TimeoutStopSec=45s</code>, <code>LimitNOFILE=65536</code>.</p>
+<p><strong>Setup address</strong> (D34): before a dashboard domain works, the dashboard is served on <code>https://&lt;server IP&gt;</code> with the self-signed cert.
+- Setup is <strong>open</strong> while the dashboard domain is not <em>ready</em>, or while an unexpired one-time password exists that has not been used to set up the account. The domain is <em>ready</em> when its Origin CA cert is installed, AOP for its zone is enforced or rolling out (§5.3), and either a request for it arrived through Cloudflare with binboat's AOP client cert (remembered per domain) or the zone is active and its SSL mode is known to be Full/Full (strict) (D41). The settings and home pages say what is missing.
+- While open, non-Cloudflare connections pass the IP filter as <em>setup connections</em>: self-signed cert whatever the SNI, no client cert, <strong>only the dashboard</strong> (never apps), client IP = TCP peer (<code>CF-Connecting-IP</code> ignored), CSRF origin = <code>https://&lt;Host&gt;</code>.
+- While the dashboard domain is ready, the setup address accepts only the one-time password, never the admin password.
+- When setup closes, non-Cloudflare connections are refused before TLS again; a request on a still-open setup connection gets a page linking to the dashboard domain.
+- Signing in with the one-time password (email empty) gives a <code>setup</code> session that can only set the admin email and a password (≥ 12 chars); saving consumes the password and revokes all sessions. First-run order: Cloudflare token → dashboard domain → GitHub token, bucket → apps; the home page lists what is missing.</p>
+<h2 id="5-edge">5. Edge</h2>
+<h3 id="51-listener-and-ip-filter">5.1 Listener and IP filter</h3>
+<p>Only <code>:443</code> (no <code>:80</code>; the user enables Cloudflare's <em>Always Use HTTPS</em>). A custom listener closes connections from outside Cloudflare's ranges <strong>before TLS</strong> (except setup connections). Ranges come from <code>/client/v4/ips</code> at start and every 24 h, the last good list is saved, a compiled-in list is the fallback, and implausible lists are refused. Rejections are counted and logged at most once a minute. Errors <code>net/http</code> reports before a request (failed handshakes) are logged: the first at once, then a count per minute (D43). Timeouts: read header 10 s, idle 120 s, no write timeout.</p>
+<h3 id="52-origin-certificates-full-strict">5.2 Origin certificates (Full strict)</h3>
+<p>Per hostname (dashboard + each app domain): local ECDSA P-256 key + CSR → Cloudflare Origin CA (<code>origin-ecc</code>, 5475 days) with the API token. Chosen by SNI; <strong>unknown SNI fails the handshake</strong>; TLS 1.2+, h2 and http/1.1. Sync (at start, every 6 h, after changes, <em>Sync now</em>) re-issues certs with &lt; 30 days left and revokes replaced ones. The zone SSL mode is checked, never changed automatically; the dashboard warns and offers <em>Set Full (strict)</em>.</p>
+<h3 id="53-authenticated-origin-pulls">5.3 Authenticated Origin Pulls</h3>
+<p>The IP filter only proves "some Cloudflare account"; zone-level AOP with binboat's own CA proves "yours" (D6). Per zone: upload the client cert + key (<code>origin_tls_client_auth</code>), turn zone AOP on, wait until Cloudflare reports the cert <code>active</code> (≤ 3 min per sync), then <strong>wait 10 more minutes</strong> for Cloudflare's edge to roll it out (D43; enforcing earlier gave 2–5 % 520s for ~5 minutes) before requiring <code>RequireAndVerifyClientCert</code> for hosts in that zone. The same wait follows any re-upload or re-enable; a timer syncs when it ends; during it no client cert is requested (verifying "if given" would reject Cloudflare's shared certificate). The enforced state is saved in <code>edge_zones</code> and applies at once after a restart, and stays on if the API is merely failing (D16). If someone deletes the cert or disables AOP in Cloudflare, the next sync restores it. The client cert is renewed 60 days before expiry (upload, wait active, delete the old one). AOP cannot be turned off.</p>
+<h3 id="54-router-and-proxy">5.4 Router and proxy</h3>
+<p><code>Host</code> (lowercased, port removed) → dashboard, an app's <code>httputil.ReverseProxy</code> to <code>127.0.0.1:&lt;port&gt;</code>, or 404; <code>Host</code> must equal the SNI or 421 (D17). The proxy replaces <code>X-Forwarded-For</code>/<code>X-Real-IP</code> with <code>CF-Connecting-IP</code>, sets <code>X-Forwarded-Proto: https</code> and <code>X-Forwarded-Host</code>, keeps <code>Host</code>, flushes immediately (<code>FlushInterval: -1</code>; SSE, long-poll, WebSockets work), dials with a 5 s timeout. Deploying → 503 (<code>Retry-After: 3</code>), starting → 503, stopped/crashed/never deployed → 503, proxy error → 502; binboat pages carry <code>X-Binboat-Page</code> and <code>no-store</code>. Per-app counters (requests, status classes, latency histogram) feed monitoring.</p>
+<h3 id="55-cloudflare-token-dns-domains">5.5 Cloudflare token, DNS, domains</h3>
+<p>Token permissions: Zone Read, DNS Edit, SSL and Certificates Edit, Zone Settings Edit; saving it verifies it, lists readable zones and names missing permissions. For each domain: zone by longest suffix (a domain in no zone is refused when saved), proxied <code>A</code> (+ <code>AAAA</code> if the server has IPv6) created or updated, conflicting CNAMEs or duplicates reported, never touched. Edge sync is best effort per host (D18). Public IPv4/IPv6 are detected via <code>https://www.cloudflare.com/cdn-cgi/trace</code>. The dashboard domain (needs the token, can't be an app's domain) is routed at once and set up in the background; replacing it deletes the old DNS records and revokes its cert; sessions are per domain. Deleting an app or changing its domain cleans up the same way.</p>
+<h2 id="6-apps-and-processes">6. Apps and processes</h2>
+<ul>
+<li><strong>Names</strong> come from the repository name: lowercased, <code>_</code>/<code>.</code> → <code>-</code>, 2–24 chars <code>a-z0-9-</code>, starting with a letter (D36). One repo = one app. Ports are assigned once from 20001 up.</li>
+<li><strong>Users:</strong> <code>binboat-&lt;app&gt;</code> (system, no home, <code>nologin</code>); <code>data/</code> and <code>tmp/</code> 0700 owned by it; releases root-owned; other apps' and binboat's files unreadable.</li>
+<li><strong>cgroups</strong> (D2): binboat owns <code>system.slice/binboat.service/</code> (<code>Delegate=yes</code>), moves itself into <code>supervisor/</code>, apps run in <code>apps/&lt;app&gt;/</code> with <code>memory.max</code> (default 256M), <code>memory.swap.max=0</code>, <code>memory.zswap.max=0</code>, <code>cpu.max</code> (1 core), <code>pids.max</code> (256); no <code>memory.high</code> (D11); <code>RLIMIT_NOFILE</code> 4096 via prlimit. Processes start inside their cgroup (<code>CLONE_INTO_CGROUP</code>) with the app's uid/gid, <code>Setpgid</code>, <code>Pdeathsig=SIGKILL</code>, cwd = current release, a clean env (<code>PATH</code>, <code>LANG</code>, contract vars, user env, and <code>GOMEMLIMIT</code> = 90% of <code>memory.max</code> unless the user sets one; D45). Killing = SIGKILL every PID in the cgroup until empty, <strong>never <code>cgroup.kill</code></strong> (D10: after it was written once, later <code>CLONE_INTO_CGROUP</code> children died instantly). <code>memory.events</code> OOM kills are recorded.</li>
+<li><strong>Supervisor:</strong> <code>stopped → starting → running → stopping</code>, plus <code>crashed</code>, <code>deploying</code>. Running = TCP connect then <code>GET health_path</code> 2xx/3xx within 30 s. Stop = SIGTERM, 10 s, kill the cgroup. Restarts with backoff 1 s → 60 s; 5 exits in 5 min → <code>crashed</code> until the user restarts. At start, apps with desired state <code>running</code> start one at a time. A binboat restart restarts all apps (seconds of downtime, accepted).</li>
+<li><strong>Logs:</strong> stdout/stderr lines get a timestamp and stream tag → <code>app.log</code> (10 MB × 3) + a 1000-line ring buffer streamed to the dashboard over SSE; lines &gt; 16 KB are split.</li>
+<li><strong>Config changes</strong> (env, limits) are stored at once and apply on restart/deploy; the page says "restart needed" (D20). Env names <code>PORT</code>, <code>HOST</code>, <code>DATA_DIR</code>, <code>TMPDIR</code>, <code>BINBOAT_*</code> are reserved.</li>
+<li><strong>Delete</strong> (type the name): refused while deploying; stop, remove cgroup, rows, releases, logs, DNS records and cert, user; <code>DATA_DIR</code> is kept in <code>deleted/</code> unless unticked (D21); backups are kept unless "also delete its backups" is ticked.</li>
+</ul>
+<h2 id="7-releases-and-deploys">7. Releases and deploys</h2>
+<p>A release (D39, D40) has <code>app-linux-amd64.tar.gz</code>, <code>app-linux-arm64.tar.gz</code> (<code>binboat.toml</code> at the root, the binary, runtime files) and <code>checksums.txt</code>. Tags become directory names: <code>[A-Za-z0-9][A-Za-z0-9._-]{0,63}</code>. The app page lists the 10 newest non-draft releases (<code>/repos/&lt;o&gt;/&lt;r&gt;/releases?per_page=10</code>, cached 1 min, latest preselected); binboat deploys <strong>only on click</strong> (D4). One deployment runs at a time host-wide; others queue.</p>
+<pre><code>1. Tag already kept in releases/&lt;tag&gt;/ → use it (skip 2–5)
+2. GitHub API: release by tag → asset for this CPU + checksums.txt      [app keeps serving]
+3. Download both (stored token; redirect to the signed asset URL without the token; size limit), check SHA-256
+4. Unpack into downloads/ (no absolute paths, &quot;..&quot;, devices, escaping symlinks; bounded size),
+   validate binboat.toml, check `run` is an executable ELF for this CPU
+5. Move to apps/&lt;app&gt;/releases/&lt;tag&gt;/ (root-owned)
+── downtime (measured 60–220 ms plus the app's start) ──
+6. Router: deploying (503)   7. Stop old   8. Pre-deploy backup (snapshot; upload in background)
+9. Atomic swap of `current`   10. Wipe tmp/, start, health check
+11a. Healthy → serve, succeeded, prune to 3 kept releases
+11b. Unhealthy → stop, point `current` back, start the old release if it was running, delete the new one, failed
+     (the DB is not restored; the UI offers the pre-deploy backup)
+</code></pre>
+<p>A failure in 2–5 never touches the running app, and errors name the cause (missing asset, checksum, no <code>checksums.txt</code>, wrong CPU, unsafe path, bad <code>binboat.toml</code>). <strong>Rollback</strong> switches to a kept release without downloading; deploying an older tag that isn't kept downloads it again; a kept release whose files are missing is downloaded again. After a crash or restart, unfinished deployments are marked failed and <code>downloads/</code> is emptied; a switch that started (6–11) always completes. Release metadata lives in <code>releases</code>, so restarts don't re-read <code>binboat.toml</code>. GitHub: a fine-grained PAT with <em>Contents: Read-only</em> (public repos work without), sent only to <code>api.github.com</code>.</p>
+<h2 id="8-backups-and-restore">8. Backups and restore</h2>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Policy (fixed)</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Schedule</td>
+<td>every 3 h aligned to UTC (00:00, 03:00 …), before every deploy/rollback, <em>Back up now</em></td>
+</tr>
+<tr>
+<td>Retention</td>
+<td>48 h, the newest backup of each app always kept (done by binboat, not bucket rules)</td>
+</tr>
+<tr>
+<td>Local copies</td>
+<td>newest 2 per app (D22); not-yet-uploaded ones kept until the retention ends</td>
+</tr>
+<tr>
+<td>Bucket</td>
+<td><code>&lt;app&gt;/&lt;UTC time&gt;-&lt;kind&gt;-&lt;id&gt;.tar.zst</code> (D37); S3 settings sealed, saved only after a test upload/read/delete; empty secret keeps the old one; path-style SigV4</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>Scope (D46):</strong> SQLite databases only. Other files in <code>DATA_DIR</code> survive deploys (only <code>TMPDIR</code> is wiped) but are the app's own business to protect.</li>
+<li><strong>What:</strong> every file under <code>DATA_DIR</code> starting with <code>SQLite format 3\0</code> (sub-folders included), skipping <code>-wal</code>/<code>-shm</code>/<code>-journal</code> and <code>.pre-restore-*</code>.</li>
+<li><strong>Snapshot:</strong> <code>VACUUM INTO</code> with <code>busy_timeout=10000</code> while the app runs, then <code>PRAGMA quick_check</code>; sidecar files binboat creates are chowned back to the app user.</li>
+<li><strong>Archive:</strong> tar (first <code>manifest.json</code>: app, kind, time, release, binboat version, path/size/SHA-256 per DB) + zstd; its SHA-256 goes into <code>backups</code>.</li>
+<li><strong>Upload:</strong> 3 attempts with backoff; scheduled/manual uploads finish before returning, pre-deploy ones in the background; failed uploads are retried after every scheduled run and when S3 settings are saved.</li>
+<li><strong>Restore</strong> (D23): refuse while a deployment is queued/running; take the local copy if its SHA-256 matches, else download and check; unpack to staging and verify every file (size, SHA-256, safe paths, <code>quick_check</code>) — <strong>any failure stops here, the app untouched</strong>; stop the app, move the current DBs and sidecars to <code>DATA_DIR/.pre-restore-&lt;time&gt;/</code> (unique per restore, last 2 kept), copy the restored files in (fsync, rename, chown), start again if it was running.</li>
+<li><strong>Add app</strong> lists the bucket's folders, preselects the app's own name, and restores the newest archive of the chosen folder into the empty <code>DATA_DIR</code> before the first deploy (a failure leaves the app created with an error shown). Moving servers = install, re-enter the settings, add each app with its folder; shut the old server down first.</li>
+<li><strong>Badges:</strong> app and home pages show <em>backup failed</em> when the latest backup failed or isn't uploaded (a retry in progress doesn't hide an earlier problem) and warn when no bucket is set. binboat's own settings are not backed up.</li>
+</ul>
+<h2 id="9-monitoring">9. Monitoring</h2>
+<p>Every 10 s: host (<code>/proc/stat</code>, <code>/proc/meminfo</code>, <code>/proc/loadavg</code>, <code>statfs</code>), binboat itself (<code>/proc/self</code>), each app (cgroup <code>cpu.stat</code>, <code>memory.current</code>, <code>pids.current</code>, <code>io.stat</code>, <code>memory.events</code>) and proxy counters (requests, 5xx, p50/p95 from a fixed histogram 5 ms … 10 s, D26). CPU and I/O are counter deltas (a counter going backwards is a reset). 1 h of samples in memory (360 per scope); each minute is rolled up into <code>metrics_1m</code> (time-weighted averages, maxima, sums; a partial minute is written at shutdown and merged), pruned after 7 days. Charts are SVGs rendered by binboat (<code>/charts?scope=&amp;chart=&amp;range=1h|24h|7d</code>, ≤ 360 points, gaps not joined; D25). Warnings (dashboard only): disk &gt; 85 %, memory &gt; 90 %, OOM kill in the last hour, app &gt; 90 % of its memory limit, crashed, backup failed or local only, cert expiring &lt; 14 days, restart needed, setup step missing.</p>
+<h2 id="10-dashboard-and-security">10. Dashboard and security</h2>
+<ul>
+<li>Server-rendered pages; every action is a form POST + redirect (works without JS); <code>app.js</code> only does live logs (SSE), 5 s refresh of status sections and confirmations. Pages: Apps (home), App, Add app, Deployment, Logs, Monitoring, Settings, Account, Set up your account.</li>
+<li><strong>Passwords:</strong> argon2id (64 MiB, t=3, p=1), ≥ 12 chars, at most 2 hashes at a time; unknown emails hashed against a dummy. Email and password changes need the current password; a password change signs out other sessions; a forgotten password → re-run the installer.</li>
+<li><strong>Sessions:</strong> 32-byte token in <code>__Host-binboat</code> (<code>Secure; HttpOnly; SameSite=Strict; Path=/</code>), only its SHA-256 stored; 7 days idle, 30 days total; <em>sign out all others</em>.</li>
+<li><strong>Rate limit</strong> (in memory, reset by a restart): 5 failures per client IP per 15 min → 429, even for the right password; above 50 failures overall, one attempt per 2 s. Failed current-password checks count too.</li>
+<li><strong>CSRF:</strong> every POST needs <code>Origin</code> (or <code>Referer</code>) = <code>https://&lt;Host&gt;</code> and, when signed in, the session's token. Bodies ≤ 256 KB.</li>
+<li><strong>Headers:</strong> strict CSP (<code>default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'</code>), <code>X-Frame-Options: DENY</code>, <code>nosniff</code>, <code>Referrer-Policy: same-origin</code>, HSTS, <code>no-store</code>. Flash messages use a 60 s cookie.</li>
+<li>Times are stored and scheduled in UTC and shown in the server's timezone with its name (D42).</li>
+<li><strong>Status API</strong> (D47, <a href="api.html">Status API</a>): <code>GET /api/v1/status</code>, <code>/apps</code>, <code>/apps/{name}</code>, JSON, nothing else (other methods 405). One token <code>bbt_</code> + 32 random bytes, created/rotated on the Account page with the current password, shown once, only its SHA-256 stored; rotating revokes the old one. <code>Authorization: Bearer</code> only (session cookies are ignored, so no CSRF surface); refused on setup connections; wrong tokens count towards the sign-in rate limit. It reads the same data as the dashboard pages and never exposes env values or secrets.</li>
+</ul>
+<h2 id="11-budget-measured-on-the-real-vps-1-vcpu-5-apps">11. Budget (measured on the real VPS, 1 vCPU, 5 apps)</h2>
+<div class="table"><table>
+<thead>
+<tr>
+<th></th>
+<th>Target</th>
+<th>Measured</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Idle RSS</td>
+<td>&lt; 30 MB</td>
+<td>26.6 MB (soft heap limit 12 MB, <code>GOGC=50</code>, memory returned every 2 min; D27)</td>
+</tr>
+<tr>
+<td>Idle CPU</td>
+<td>&lt; 1 %</td>
+<td>0.18 %</td>
+</tr>
+<tr>
+<td>Proxy overhead</td>
+<td>&lt; 1 ms p50</td>
+<td>0.6 ms</td>
+</tr>
+<tr>
+<td>Binary</td>
+<td>&lt; 30 MB</td>
+<td>18 MB</td>
+</tr>
+<tr>
+<td>Reboot to serving</td>
+<td>seconds</td>
+<td>~10 s after boot; update by the installer: 3 s</td>
+</tr>
+</tbody>
+</table></div>
+<p>Most of the RSS is the binary's own code pages, so every new dependency costs memory.</p>
+<h2 id="12-changing-binboat">12. Changing binboat</h2>
+<ul>
+<li><code>make lint</code> (gofmt, vet, staticcheck) and <code>make test</code> (<code>-race</code>) run in CI on every PR with amd64/arm64 builds. Unit tests cover the risky pure parts: secrets, store and migrations, the one-time password, <code>binboat.toml</code>, tarball unpacking, backup archives, app names, the health check, the setup address, the GitHub client, page rendering, and the status API (token lifecycle, auth rules, responses).</li>
+<li>There is <strong>no automated end-to-end suite</strong> (D44). Anything touching processes, cgroups, deploys, backups or the edge must be tried on a real Ubuntu VPS with a real Cloudflare zone: tag a pre-release (<code>vX.Y.Z-rc1</code>, published but not "latest"), install it with <code>BINBOAT_VERSION=vX.Y.Z-rc1</code> in front of <code>bash</code> in the install command, and go through the affected flows in the dashboard. Useful checks: install/update, setup address closes, deploy + rollback + a broken release, restart/stop leaves no processes, backup + restore, direct IP access refused, no 520/521 through Cloudflare.</li>
+<li>Release: push a <code>vX.Y.Z</code> tag; the release workflow lints, tests, builds both binaries, writes <code>checksums.txt</code> and publishes them with <code>install.sh</code>. Tags with <code>-</code> are pre-releases.</li>
+<li>A schema change is a new numbered migration. An older binary then refuses the database, so going back to an earlier release after such an update needs a copy of <code>binboat.db</code> from before it; binboat doesn't make one.</li>
+</ul>
+<h2 id="13-decisions">13. Decisions</h2>
+<div class="table"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Decision</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D1</td>
+<td>Go for binboat</td>
+<td>stdlib TLS/proxy/HTTP, pure-Go SQLite and S3</td>
+</tr>
+<tr>
+<td>D2</td>
+<td>No containers: users + cgroups</td>
+<td>trusted single-owner apps; light</td>
+</tr>
+<tr>
+<td>D3</td>
+<td>Stop-then-start deploys</td>
+<td>safe with one SQLite writer; sub-second downtime</td>
+</tr>
+<tr>
+<td>D4</td>
+<td>Deploy only on click</td>
+<td>fewer moving parts</td>
+</tr>
+<tr>
+<td>D5</td>
+<td>Cloudflare Origin CA, no ACME</td>
+<td>all domains on Cloudflare; 15-year certs; no port 80</td>
+</tr>
+<tr>
+<td>D6</td>
+<td>Zone AOP with own CA + IP filter</td>
+<td>the IP filter alone lets any Cloudflare customer in</td>
+</tr>
+<tr>
+<td>D7</td>
+<td>Snapshot backups every 3 h</td>
+<td>RPO 3 h is enough; far simpler than replication</td>
+</tr>
+<tr>
+<td>D9</td>
+<td>Server-rendered HTML, tiny JS, no frontend build</td>
+<td>strict CSP, nothing to vendor</td>
+</tr>
+<tr>
+<td>D10</td>
+<td>Kill cgroups by PID, not <code>cgroup.kill</code></td>
+<td><code>cgroup.kill</code> made later <code>CLONE_INTO_CGROUP</code> children die on Ubuntu kernels</td>
+</tr>
+<tr>
+<td>D11</td>
+<td>No <code>memory.high</code>; no swap/zswap for apps</td>
+<td>clean OOM + restart instead of a stalled app</td>
+</tr>
+<tr>
+<td>D16</td>
+<td>Enforce AOP per zone only once active; persist it</td>
+<td>never break a site during setup; never fail open after a restart</td>
+</tr>
+<tr>
+<td>D17</td>
+<td><code>Host</code> must equal SNI (421)</td>
+<td>stops cross-zone requests bypassing a zone's AOP</td>
+</tr>
+<tr>
+<td>D18</td>
+<td>Edge sync best effort per host</td>
+<td>one broken domain doesn't block the others</td>
+</tr>
+<tr>
+<td>D20</td>
+<td>Config changes apply on restart/deploy</td>
+<td>predictable; "restart needed" shown</td>
+</tr>
+<tr>
+<td>D21</td>
+<td>Deleting an app keeps its data by default</td>
+<td>deletion is one click; data loss shouldn't be</td>
+</tr>
+<tr>
+<td>D22</td>
+<td>Newest archives also kept on the server</td>
+<td>restores work without the bucket; outages lose nothing</td>
+</tr>
+<tr>
+<td>D23</td>
+<td>Verify a backup fully before stopping the app</td>
+<td>a bad backup never costs uptime or data</td>
+</tr>
+<tr>
+<td>D25</td>
+<td>SVG charts rendered by binboat</td>
+<td>no JS library; works with the CSP</td>
+</tr>
+<tr>
+<td>D26</td>
+<td>Latency percentiles from a fixed histogram</td>
+<td>constant memory; bucket precision is enough</td>
+</tr>
+<tr>
+<td>D27</td>
+<td>Soft heap limit + periodic FreeOSMemory</td>
+<td>keeps idle RSS &lt; 30 MB</td>
+</tr>
+<tr>
+<td>D28</td>
+<td>systemd unit embedded, installed by <code>setup-host</code></td>
+<td>one copy; the binary can repair it</td>
+</tr>
+<tr>
+<td>D33</td>
+<td>The dashboard is the only interface</td>
+<td>one non-technical user; each extra way is more to maintain</td>
+</tr>
+<tr>
+<td>D34</td>
+<td>First sign-in with an installer-printed one-time password on a self-signed setup address that closes</td>
+<td>no first-come public claim page; admin password never used outside Cloudflare</td>
+</tr>
+<tr>
+<td>D35</td>
+<td>Update = re-run the installer</td>
+<td>one command for install, update, recovery</td>
+</tr>
+<tr>
+<td>D36</td>
+<td>App name = repository name; <code>binboat.toml</code> at the root</td>
+<td>predictable names and backup folders</td>
+</tr>
+<tr>
+<td>D37</td>
+<td>Bucket folder per app; restore chosen at Add app; no settings backup</td>
+<td>moving servers needs only the bucket and a few settings</td>
+</tr>
+<tr>
+<td>D38</td>
+<td>binboat never builds; apps ship as GitHub releases</td>
+<td>builds don't fit next to apps on 1 GB; removes toolchains and git from the server</td>
+</tr>
+<tr>
+<td>D39</td>
+<td>Releases, not Actions artifacts</td>
+<td>permanent, versioned; rollback = older tag</td>
+</tr>
+<tr>
+<td>D40</td>
+<td>Fixed asset names + <code>checksums.txt</code>, static musl</td>
+<td>no naming rules; no libc dependency; catches bad downloads</td>
+</tr>
+<tr>
+<td>D41</td>
+<td>Dashboard domain ready after a visit through Cloudflare with AOP, or an active zone in Full/Full (strict)</td>
+<td>a Flexible zone once locked the user out; a visit is the strongest proof</td>
+</tr>
+<tr>
+<td>D42</td>
+<td>UTC everywhere, shown in server time with the zone name</td>
+<td>the server's timezone never changes behaviour</td>
+</tr>
+<tr>
+<td>D43</td>
+<td>Require AOP 10 min after Cloudflare reports it active (and after re-uploads); log handshake errors; check the zone when a domain is saved</td>
+<td>Cloudflare's edge rolls certs out over minutes (2–5 % 520s otherwise); the cause had been invisible; typos failed silently</td>
+</tr>
+<tr>
+<td>D44</td>
+<td>No automated end-to-end suite; unit tests + a real-VPS check for risky changes</td>
+<td>single-user tool that rarely changes; the real VPS found what the fakes couldn't</td>
+</tr>
+<tr>
+<td>D45</td>
+<td><code>GOMEMLIMIT</code> = 90% of the app's memory limit, unless the app sets it</td>
+<td>Go ignores cgroup limits, so its GC would otherwise let the kernel OOM-kill the app; other languages ignore the variable</td>
+</tr>
+<tr>
+<td>D46</td>
+<td>Back up SQLite databases only; other <code>DATA_DIR</code> files are the app's responsibility</td>
+<td>keeps backups small, fast and verifiable; binboat is not a file-backup tool</td>
+</tr>
+<tr>
+<td>D47</td>
+<td>A read-only status API with one rotatable bearer token</td>
+<td>agents and scripts can answer "is it up?" without a browser; read-only keeps the dashboard the only way to change things (D33) and makes a leaked token low-impact</td>
+</tr>
+</tbody>
+</table></div></main>
+<footer>binboat is licensed under <a href="https://github.com/sumitwaani2/binboat/blob/main/LICENSE" rel="noopener">Apache 2.0</a> · <a href="https://github.com/sumitwaani2/binboat" rel="noopener">Source on GitHub</a></footer>
+</body>
+</html>

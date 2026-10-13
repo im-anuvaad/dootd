@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install · binboat</title>
+<meta name="description" content="Install binboat on an Ubuntu VPS, set it up in the browser, update it and fix common problems.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">binboat</a>
+  <nav><a href="index.html">Overview</a><a href="install.html" aria-current="page">Install</a><a href="apps.html">Hosting an app</a><a href="api.html">Status API</a><a href="internals.html">How it works</a><a href="https://github.com/sumitwaani2/binboat" rel="noopener">GitHub</a></nav>
+</header>
+<main>
+<h1 id="install-and-set-up">Install and set up</h1>
+<nav class="toc" aria-label="On this page"><b>On this page</b><ul><li><a href="#before-you-start">Before you start</a></li><li><a href="#install">Install</a></li><li><a href="#first-steps-in-the-browser">First steps in the browser</a></li><li><a href="#updating-and-when-you-are-locked-out">Updating, and when you are locked out</a></li><li><a href="#moving-to-a-new-server">Moving to a new server</a></li><li><a href="#troubleshooting">Troubleshooting</a></li></ul></nav>
+<h2 id="before-you-start">Before you start</h2>
+<ul>
+<li>A fresh Ubuntu 24.04+ VPS with SSH access.</li>
+<li>Your domains on your Cloudflare account. For each zone, turn on <strong>SSL/TLS → Edge Certificates → Always Use HTTPS</strong> (binboat has no port 80).</li>
+<li>A Cloudflare API token (<strong>My Profile → API Tokens → Create Custom Token</strong>) for your zones with:</li>
+</ul>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Permission</th>
+<th>Used for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Zone → Zone → Read</td>
+<td>finding the zone of each domain</td>
+</tr>
+<tr>
+<td>Zone → DNS → Edit</td>
+<td>proxied DNS records</td>
+</tr>
+<tr>
+<td>Zone → SSL and Certificates → Edit</td>
+<td>Origin CA certificates, the origin pull certificate</td>
+</tr>
+<tr>
+<td>Zone → Zone Settings → Edit</td>
+<td>turning on Authenticated Origin Pulls, reading and setting the SSL/TLS mode</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>Optional: a GitHub fine-grained token with <em>Contents: Read-only</em> on your app repos (needed for private repos), and an R2 bucket with an R2 API token (<em>Object Read &amp; Write</em> on that bucket).</li>
+</ul>
+<h2 id="install">Install</h2>
+<pre><code class="language-bash">curl -fsSL https://github.com/sumitwaani2/binboat/releases/latest/download/install.sh | sudo bash
+</code></pre>
+<p>It asks nothing, takes a few seconds and ends with the address to open (<code>https://&lt;server IP&gt;</code>) and a <strong>one-time password</strong>. You can close SSH now.</p>
+<h2 id="first-steps-in-the-browser">First steps in the browser</h2>
+<ol>
+<li>Open the address, accept the certificate warning (expected on this first visit), and sign in with the <strong>one-time password</strong>, leaving the email empty.</li>
+<li><strong>Set up your account</strong>: your email and a password (at least 12 characters).</li>
+<li><strong>Settings → Cloudflare</strong>: paste the API token. binboat checks it and lists the zones it can use and any missing permission.</li>
+<li><strong>Settings → Dashboard domain</strong>: e.g. <code>binboat.example.com</code>. binboat creates the DNS record, the certificate and the origin pull setup and shows the progress; the first time for a zone this takes about 10 minutes. If the zone's SSL/TLS mode isn't Full (strict), press <strong>Set Full (strict)</strong> under <strong>Zones</strong>. Then open <code>https://binboat.example.com</code> and sign in; from then on the IP address no longer answers.</li>
+<li><strong>Settings → GitHub</strong> and <strong>Settings → Backups</strong> (endpoint <code>https://&lt;account id&gt;.r2.cloudflarestorage.com</code>, region <code>auto</code>, bucket, keys).</li>
+<li><strong>Your app repo</strong> follows <a href="apps.html">Hosting an app</a>: a <code>binboat.toml</code> and the release workflow. Push a tag (<code>git tag v1.0.0 &amp;&amp; git push origin v1.0.0</code>) and GitHub publishes a release a few minutes later.</li>
+<li><strong>Apps → Add app</strong>: pick the repo and a domain (e.g. <code>blog.example.com</code>). The app is named after the repo. Add env vars if needed, choose a release under <strong>Deploy</strong> and watch the deploy log.</li>
+</ol>
+<p>The home page always lists what is still missing.</p>
+<h2 id="updating-and-when-you-are-locked-out">Updating, and when you are locked out</h2>
+<p>Run the install command again. It installs the latest binboat, keeps all apps and settings, restarts them (a few seconds of downtime) and prints a new one-time password. Use that password only if you need it, e.g. after forgetting your password or when the dashboard domain stops working: for 24 hours the server's IP address accepts it.</p>
+<h2 id="moving-to-a-new-server">Moving to a new server</h2>
+<ol>
+<li>Shut the old server down (both would otherwise write to the same backup folders).</li>
+<li>Install on the new server and repeat steps 1–5 with the same tokens and bucket.</li>
+<li><strong>Add app</strong> for each app. The form lists the bucket's folders and preselects the one with the app's name: binboat restores its newest backup before the first deploy. DNS records follow automatically.</li>
+</ol>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>no Cloudflare zone found for …</code> when saving a domain</td>
+<td>The domain isn't on this Cloudflare account, is misspelled, or the token doesn't cover that zone</td>
+</tr>
+<tr>
+<td><code>… lacks the … permission</code></td>
+<td>Add the missing permission to the token, then <strong>Sync now</strong> in Settings</td>
+</tr>
+<tr>
+<td>Dashboard domain stays "being set up"</td>
+<td>The page says what it waits for: Cloudflare rolling out the origin pull certificate (about 10 minutes the first time), a zone in Flexible mode (<strong>Set Full (strict)</strong>), or a token without Zone Settings permission</td>
+</tr>
+<tr>
+<td>Cloudflare error 521</td>
+<td>The SSL/TLS mode is Flexible or Off, so Cloudflare connects to port 80: <strong>Settings → Zones → Set Full (strict)</strong>. A Page Rule or Configuration Rule can also set Flexible for one hostname; remove it</td>
+</tr>
+<tr>
+<td>Cloudflare error 526</td>
+<td>Full (strict) but the certificate isn't installed yet: <strong>Sync now</strong> in Settings</td>
+</tr>
+<tr>
+<td>Cloudflare error 525 / 520</td>
+<td>Origin pulls were changed in Cloudflare; binboat repairs them on the next sync (<strong>Sync now</strong>) and waits a few minutes before requiring them again</td>
+</tr>
+<tr>
+<td><code>has a CNAME record</code></td>
+<td>Delete the CNAME in Cloudflare; binboat creates the A record</td>
+</tr>
+<tr>
+<td>Nothing answers at all</td>
+<td>Re-run the install command and use the address and one-time password it prints</td>
+</tr>
+</tbody>
+</table></div></main>
+<footer>binboat is licensed under <a href="https://github.com/sumitwaani2/binboat/blob/main/LICENSE" rel="noopener">Apache 2.0</a> · <a href="https://github.com/sumitwaani2/binboat" rel="noopener">Source on GitHub</a></footer>
+</body>
+</html>
