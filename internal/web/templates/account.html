@@ -29,4 +29,31 @@
   </table>
   <form method="post" action="/account/revoke-others" class="inline">{{template "csrf" $csrf}}<button>Sign out all other sessions</button></form>
 </section>
+<section class="card" id="api">
+  <h2>API token</h2>
+  <p class="muted">Lets scripts and AI agents read the status of the server and the apps (<a href="https://github.com/sumitwaani2/binboat/blob/main/docs/api.md" target="_blank" rel="noopener">API reference</a>). The API is read-only: it can't deploy, stop or change anything. Send the token as <code>Authorization: Bearer &lt;token&gt;</code> to <code>{{.Data.APIBase}}</code>.</p>
+  {{with .Data.NewAPIToken}}
+  <div class="info">
+    <b>Copy the new token now: it is not shown again.</b>
+    <input class="secret" value="{{.}}" readonly autocomplete="off" spellcheck="false" aria-label="New API token">
+    If there was a previous token, it has stopped working.
+  </div>
+  {{end}}
+  {{with .Data.APIToken}}
+  <dl class="facts">
+    <dt>Status</dt><dd>active, created {{datetime .CreatedAt}}</dd>
+    <dt>Last used</dt><dd>{{if .LastUsed.IsZero}}never{{else}}{{ago .LastUsed}}{{end}}</dd>
+  </dl>
+  {{else}}
+  <p>No token yet, so the API refuses every request.</p>
+  {{end}}
+  <form method="post" action="/account/api-token" class="grid" {{if .Data.APIToken}}data-confirm="Create a new token? The current one stops working immediately."{{end}}>
+    {{template "csrf" $csrf}}
+    <label>Current password <input type="password" name="current" autocomplete="current-password" required></label>
+    <div class="wide buttons"><button>{{if .Data.APIToken}}Rotate token{{else}}Create token{{end}}</button></div>
+  </form>
+  {{if .Data.APIToken}}
+  <form method="post" action="/account/api-token/revoke" class="inline" data-confirm="Revoke the API token? Everything using it stops working.">{{template "csrf" $csrf}}<button class="danger">Revoke token</button></form>
+  {{end}}
+</section>
 {{end}}

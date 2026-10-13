@@ -13,6 +13,7 @@ Cloudflare (proxied, Full strict) ──HTTPS──► binboat (TLS + routing + 
 - **Light isolation**: each app runs as its own Linux user with memory, CPU and process limits.
 - **SQLite backups to R2 or any S3-compatible bucket** every 3 hours and before every deploy, kept for 48 hours, with one-click restore.
 - **Monitoring and logs**: CPU, memory, requests and response times per app, live logs, deploy logs.
+- **Read-only status API** for scripts and AI agents ("is my blog up?"), with one rotatable token: [docs/api.md](docs/api.md).
 
 Scope: 1 server (Ubuntu 24.04+, 1 GB RAM is enough), 1 user, about 5 apps. Status: **v1.0.0**.
 

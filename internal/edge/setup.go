@@ -37,10 +37,14 @@ func connContext(ctx context.Context, c net.Conn) context.Context {
 		c = tc.NetConn()
 	}
 	if _, ok := c.(*setupConn); ok {
-		return context.WithValue(ctx, directKey, true)
+		return MarkDirect(ctx)
 	}
 	return ctx
 }
+
+// MarkDirect marks ctx as belonging to a setup-address connection (see
+// IsDirect).
+func MarkDirect(ctx context.Context) context.Context { return context.WithValue(ctx, directKey, true) }
 
 // IsDirect reports whether r arrived on the setup address rather than
 // through Cloudflare.

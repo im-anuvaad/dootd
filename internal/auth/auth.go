@@ -65,6 +65,9 @@ type Auth struct {
 	lastFail time.Time
 
 	setup setupState
+
+	apiMu      sync.Mutex // serialises API token rotation and last-use updates
+	apiTouched time.Time
 }
 
 // New returns an Auth backed by db.

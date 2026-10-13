@@ -62,6 +62,7 @@ button[disabled]{opacity:.5;cursor:not-allowed}
 .error ul{margin:6px 0 0 18px;padding:0}
 .error-text{color:var(--err)}.warn-text{color:var(--warn)}.muted{color:var(--muted)}
 .pre{white-space:pre-wrap}
+input.secret{display:block;width:100%;margin:8px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
 pre.log{background:#0b1020;color:#d1d5db;padding:14px;border-radius:8px;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;max-height:70vh;overflow:auto;white-space:pre-wrap;word-break:break-all}
 .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:16px}
 .charts figure{margin:0}.charts figcaption{font-weight:600;font-size:13px;margin-bottom:4px}

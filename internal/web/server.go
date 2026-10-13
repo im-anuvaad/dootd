@@ -116,6 +116,9 @@ func (s *Server) Handler() (http.Handler, error) {
 	authed("POST /account/email", s.changeEmail)
 	authed("POST /account/password", s.changePassword)
 	authed("POST /account/revoke-others", s.revokeOthers)
+	authed("POST /account/api-token", s.rotateAPIToken)
+	authed("POST /account/api-token/revoke", s.revokeAPIToken)
+	s.apiRoutes(mux)
 	return s.secure(mux), nil
 }
 
