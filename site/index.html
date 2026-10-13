@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>binboat</title>
+<meta name="description" content="A tiny single-binary PaaS for small SQLite web apps (Go, Zig or C) on one VPS behind Cloudflare.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="index.html">binboat</a>
+  <nav><a href="index.html" aria-current="page">Overview</a><a href="install.html">Install</a><a href="apps.html">Hosting an app</a><a href="api.html">Status API</a><a href="internals.html">How it works</a><a href="https://github.com/sumitwaani2/binboat" rel="noopener">GitHub</a></nav>
+</header>
+<main>
+<h1 id="binboat">binboat</h1>
+<p>A tiny, self-contained PaaS for hosting small server-rendered web apps (<strong>Go, Zig or C</strong> + SQLite) on a single VPS behind Cloudflare.</p>
+<p>One binary. No Docker, no extra reverse proxy. SSH in once and run one command; it prints a one-time password, and everything else happens in a web dashboard.</p>
+<pre><code>Cloudflare (proxied, Full strict) ──HTTPS──► binboat (TLS + routing + dashboard + deploys + backups) ──► your apps on 127.0.0.1
+</code></pre>
+<ul>
+<li><strong>Deploy GitHub releases with a click.</strong> Each app's own GitHub Actions workflow tests and builds it when you push a tag; binboat lists the releases and <strong>Deploy</strong> downloads, verifies and runs the one you pick. The server never compiles anything. Rollback is one click too.</li>
+<li><strong>Only your Cloudflare account can reach your apps</strong>: Cloudflare Origin CA certificates (Full strict), a Cloudflare-only IP filter and Authenticated Origin Pulls with binboat's own certificate.</li>
+<li><strong>Light isolation</strong>: each app runs as its own Linux user with memory, CPU and process limits.</li>
+<li><strong>SQLite backups to R2 or any S3-compatible bucket</strong> every 3 hours and before every deploy, kept for 48 hours, with one-click restore.</li>
+<li><strong>Monitoring and logs</strong>: CPU, memory, requests and response times per app, live logs, deploy logs.</li>
+<li><strong>Read-only status API</strong> for scripts and AI agents ("is my blog up?"), with one rotatable token: <a href="api.html">Status API</a>.</li>
+</ul>
+<p>Scope: 1 server (Ubuntu 24.04+, 1 GB RAM is enough), 1 user, about 5 apps. Status: <strong>v1.0.0</strong>.</p>
+<h2 id="quick-start">Quick start</h2>
+<p>On a fresh Ubuntu 24.04+ VPS with your domains on Cloudflare:</p>
+<pre><code class="language-bash">curl -fsSL https://github.com/sumitwaani2/binboat/releases/latest/download/install.sh | sudo bash
+</code></pre>
+<p>It prints the address to open and a one-time password. <a href="install.html">Install and set up</a> has the details: the Cloudflare token you need and the first steps in the browser.</p>
+<h2 id="documentation">Documentation</h2>
+<ul>
+<li><a href="install.html">Install</a>: what you need, the one install command, first steps in the browser, updates, moving servers, troubleshooting.</li>
+<li><a href="apps.html">Hosting an app</a>: the app contract. What a Go, Zig or C app must do, and the release workflow that builds it.</li>
+<li><a href="api.html">Status API</a>: read-only JSON for scripts and AI agents.</li>
+<li><a href="internals.html">How it works</a>: the architecture and the decisions behind it.</li>
+</ul>
+<h2 id="license-and-maintenance">License and maintenance</h2>
+<p>binboat is licensed under the <a href="https://github.com/sumitwaani2/binboat/blob/main/LICENSE" rel="noopener">Apache License 2.0</a>.</p>
+<p>It is offered as it is, with no roadmap:</p>
+<ul>
+<li>At most one release a year (minor or major).</li>
+<li>Bugs and issues are fixed actively; new features are not planned.</li>
+<li>Changes stay within the scope described above: one server, one user, a few apps behind Cloudflare. Requests beyond it are declined, even good ones.</li>
+</ul></main>
+<footer>binboat is licensed under <a href="https://github.com/sumitwaani2/binboat/blob/main/LICENSE" rel="noopener">Apache 2.0</a> · <a href="https://github.com/sumitwaani2/binboat" rel="noopener">Source on GitHub</a></footer>
+</body>
+</html>

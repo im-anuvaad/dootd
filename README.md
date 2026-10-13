@@ -96,4 +96,4 @@ make lint        # gofmt, go vet, staticcheck
 make test        # go test -race ./...
 ```
 
-Push a `vX.Y.Z` tag to release. How binboat works inside, and how to check a change on a real server before releasing it: [docs/architecture.md](docs/architecture.md).
+The documentation site (static HTML for Cloudflare Pages) is in [`site/`](site/README.md). Push a `vX.Y.Z` tag to release. How binboat works inside, and how to check a change on a real server before releasing it: [docs/architecture.md](docs/architecture.md).

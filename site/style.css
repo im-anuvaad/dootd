@@ -1,0 +1,39 @@
+:root{--fg:#1d2330;--muted:#5f6878;--line:#e5e7eb;--bg:#fff;--soft:#f6f7f9;--code:#f1f3f5;--accent:#2f5bea;--top:#111827}
+@media (prefers-color-scheme:dark){:root{--fg:#e5e7eb;--muted:#9ca3af;--line:#2d3340;--bg:#14171d;--soft:#1b1f27;--code:#222733;--accent:#8aa6ff;--top:#0b0d12}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);background:var(--bg)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 24px;padding:10px 24px;background:var(--top)}
+.top .brand{color:#fff;font-weight:700;font-size:19px;letter-spacing:.4px}
+.top nav{display:flex;flex-wrap:wrap;gap:2px 18px}
+.top nav a{color:#cbd5e1;padding:6px 0}.top nav a:hover{color:#fff;text-decoration:none}
+.top nav a[aria-current]{color:#fff;font-weight:600}
+main{max-width:860px;margin:0 auto;padding:28px 20px 40px;overflow-wrap:break-word}
+footer{border-top:1px solid var(--line);color:var(--muted);font-size:14px;text-align:center;padding:20px}
+h1{font-size:30px;line-height:1.25;margin:8px 0 16px}
+h2{font-size:22px;margin:40px 0 12px;padding-top:12px;border-top:1px solid var(--line)}
+h3{font-size:18px;margin:28px 0 8px}
+h2,h3{scroll-margin-top:12px}
+p,ul,ol{margin:0 0 14px}li{margin:4px 0}
+code{font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--code);padding:1px 5px;border-radius:4px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:0 0 16px}
+pre code{background:none;padding:0;font-size:13.5px}
+.table{overflow-x:auto;margin:0 0 16px}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--soft)}
+ul.checklist{list-style:none;padding-left:0}
+ul.checklist li{padding-left:28px;position:relative}
+ul.checklist li::before{content:"";position:absolute;left:2px;top:.35em;width:14px;height:14px;border:2px solid var(--muted);border-radius:3px}
+.toc{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:12px 18px;margin:0 0 24px;font-size:15px}
+.toc ul{list-style:none;margin:6px 0 0;padding:0;columns:2;column-gap:28px}.toc li{margin:2px 0;break-inside:avoid}
+@media (max-width:640px){
+  .top{padding:8px 16px}
+  .top nav{gap:0 14px}
+  .top nav a{padding:8px 0}
+  main{padding:20px 14px 32px}
+  h1{font-size:25px}h2{font-size:20px}
+  .toc ul{columns:1}
+  th,td{padding:6px 8px}
+}
